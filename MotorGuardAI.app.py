@@ -57,8 +57,8 @@ def check_password():
             st.error("😕 Username or password incorrect.")
 
     if not st.session_state["authenticated"]:
-        # هنا تم إضافة الأرقام لحل المشكلة
-        cols = st.columns() 
+        # تم تعديل الأقواس هنا لتصبح دائرية لضمان الظهور والعمل
+        cols = st.columns((1, 2, 1)) 
         with cols:
             st.markdown("""
             <div style="background-color:#F5F5F5; padding:30px; border-radius:15px; border-bottom: 5px solid #DD4B39; text-align: center;">
@@ -125,14 +125,14 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("🌡️ Thermal Sensors")
-    air_temp = st.number_input("Air Temperature [K]", min_value=290.0, max_value=310.0, value=298.0, step=0.1, help="Temperature of ambient air near the motor.")
-    process_temp = st.number_input("Process Temperature [K]", min_value=300.0, max_value=320.0, value=308.0, step=0.1, help="Temperature of the internal winding process.")
+    air_temp = st.number_input("Air Temperature [K]", min_value=290.0, max_value=310.0, value=298.0, step=0.1)
+    process_temp = st.number_input("Process Temperature [K]", min_value=300.0, max_value=320.0, value=308.0, step=0.1)
     
     st.markdown("---")
     st.subheader("⚙️ Mechanical Sensors")
-    rpm = st.slider("Rotational Speed [rpm]", min_value=1100, max_value=2900, value=1500, step=10, help="Motor output speed.")
-    torque = st.slider("Torque [Nm]", min_value=10.0, max_value=80.0, value=40.0, step=0.5, help="Motor output torque/force.")
-    tool_wear = st.slider("Tool Wear [min]", min_value=0, max_value=260, value=50, step=1, help="Cumulative wear time on the internal components.")
+    rpm = st.slider("Rotational Speed [rpm]", min_value=1100, max_value=2900, value=1500, step=10)
+    torque = st.slider("Torque [Nm]", min_value=10.0, max_value=80.0, value=40.0, step=0.5)
+    tool_wear = st.slider("Tool Wear [min]", min_value=0, max_value=260, value=50, step=1)
     
     st.markdown("---")
     analyze_btn = st.button("🔍 Analyze Motor State", use_container_width=True, type="primary")
@@ -173,7 +173,7 @@ if analyze_btn and scaler and model:
         status_color = "#DD4B39"
         status_bg = "#FDEDEC"
         status_title = "ALERT: INTERVENTION REQUIRED"
-        status_msg = f"Potential imminent failure detected: **{prediction_label.upper()}**.\nInspect the asset immediately."
+        status_msg = f"Potential imminent failure detected: **{prediction_label.upper()}**."
         sys_status_log = "Critical"
 
     st.markdown(f"""
@@ -186,33 +186,23 @@ if analyze_btn and scaler and model:
     st.markdown("---")
     st.markdown("### 📊 Live Telemetry & Advanced Analysis")
     
-    # هنا تم إضافة الأرقام لحل المشكلة
-    g_cols = st.columns() 
+    # تم تعديل الأقواس هنا لتصبح دائرية (1, 1, 1, 2)
+    g_cols = st.columns((1, 1, 1, 2)) 
     
     with g_cols:
-        st.help(help="Cumulative wear time on the internal components (min). Failure expected after ~200 mins.")
         st.plotly_chart(create_industrial_gauge(tool_wear, "Tool Wear", "min", 260, {'warn': 150, 'danger': 200, 'critical': 240}), use_container_width=True)
     with g_cols:
-        st.help(help="Temperature of ambient air near the motor [K]. Danger above ~302K.")
         st.plotly_chart(create_industrial_gauge(air_temp, "Air Temp", "K", 310, {'warn': 301, 'danger': 303, 'critical': 305}), use_container_width=True)
     with g_cols:
-        st.help(help="Temperature of the internal winding process [K]. Heat failure occurs if Process - Air is high.")
         st.plotly_chart(create_industrial_gauge(process_temp, "Process Temp", "K", 320, {'warn': 310, 'danger': 315, 'critical': 318}), use_container_width=True)
     with g_cols:
-        st.help(help="Aggregated Probability of Any Failure. Sum of probabilities for HDF, OSF, PWF, TWF, RNF.")
         st.plotly_chart(create_industrial_gauge(overall_failure_risk_pct, "OVERALL FAILURE RISK", "%", 100, {'warn': 25, 'danger': 50, 'critical': 80}), use_container_width=True)
 
     st.markdown("---")
-    st.markdown("### 📈 AI Root Cause Analysis (Root Cause Determination)")
-    st.help(help="Dynamic Bar Chart showing the factors contributing most to the current failure diagnosis.")
-
-    fig_pattern = px.bar(data_pattern_importances, x='Impact', y='Feature', orientation='h',
-                     color_discrete_sequence=['#DD4B39'])
+    st.markdown("### 📈 AI Root Cause Analysis")
+    fig_pattern = px.bar(data_pattern_importances, x='Impact', y='Feature', orientation='h', color_discrete_sequence=['#DD4B39'])
     fig_pattern.update_layout(height=350, margin=dict(l=10, r=10, t=30, b=10))
     st.plotly_chart(fig_pattern, use_container_width=True)
-    
-    if prediction_label != 'Normal':
-        st.info(f"Root Cause of {prediction_label}: Refer to the top bars of the 'AI Pattern Analysis' Chart.")
 
     new_log_raw = pd.DataFrame([{
         'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -224,54 +214,19 @@ if analyze_btn and scaler and model:
     }])
     st.session_state['inspection_log'] = pd.concat([new_log_raw, st.session_state['inspection_log']], ignore_index=True)
 
-    report_text = f"""
-=========================================
- MotorGuard AI - Inspection Report © 2026
- Industrial Predictive Diagnostics Engine V1.0
-=========================================
-Date/Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-Generated by Eng. Mahmoud System
-
---- Motor Identification ---
-Motor Type (Quality Level): {motor_type}
-
---- SCADA Sensor Telemetry (Raw) ---
-Air Temperature: {air_temp} K
-Process Temperature: {process_temp} K
-Rotational Speed: {rpm} RPM
-Torque: {torque} Nm
-Tool Wear: {tool_wear} min
-
---- AI Multi-Label Diagnosis ---
-Overall Failure Risk: {overall_failure_risk_pct:.1f}%
-System Security Status: {sys_status_log.upper()}
-AI Predicted Failure Mode: **{prediction_label.upper()}**
-=========================================
-    """
-    st.download_button(
-        label="📥 Download Secure Diagnostic Report (TXT)",
-        data=report_text,
-        file_name=f"MotorGuard_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-        mime="text/plain"
-    )
+    st.download_button(label="📥 Download Diagnostic Report (TXT)", data=f"Diagnosis: {prediction_label}\nRisk: {overall_failure_risk_pct:.1f}%", file_name="MotorGuard_Report.txt")
 
 # =========================================
 # 7. INSPECTION HISTORY LOG
 # =========================================
 st.markdown("---")
-st.markdown("### 📋 Automated Inspection Log (Session History)")
+st.markdown("### 📋 Automated Inspection Log")
 if not st.session_state['inspection_log'].empty:
     st.dataframe(st.session_state['inspection_log'], use_container_width=True)
 else:
-    st.info("No active inspection history available in current session.")
+    st.info("No active inspection history available.")
 
 # =========================================
 # 8. INDUSTRIAL FOOTER & RIGHTS
 # =========================================
-st.markdown("""
-<hr>
-<div style='text-align: center; color: #888888; font-size: 11px; font-family: sans-serif; padding-top: 10px;'>
-    <p style='margin: 0; padding-bottom: 5px;'>⚙️ <strong>MotorGuard AI Pro</strong> | Industrial Diagnostics V1.0</p>
-    <p style='margin: 0;'>Developed by <strong>Eng. Mahmoud</strong> © 2026. All Rights Reserved. This system is for secure industrial monitoring.</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<hr><div style='text-align: center; color: #888888; font-size: 11px;'>⚙️ MotorGuard AI Pro | Developed by Eng. Mahmoud © 2026</div>", unsafe_allow_html=True)
