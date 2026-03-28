@@ -85,7 +85,7 @@ def logout():
     st.rerun()
 
 def create_industrial_gauge(value, title, color_theme, max_val=100):
-    safe_value = float(value) # ✅ Fix: Ensure value is a standard Python float
+    safe_value = float(value)
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = safe_value,
@@ -173,13 +173,14 @@ if analyze_btn and scaler and model:
         
         probs = model.predict_proba(processed_df)
         
-        p_normal = float(probs * 100) if len(probs) > 0 else 0.0 # ✅ Fix: Enforce float
-        p_hdf = float(probs * 100) if len(probs) > 1 else 0.0 # ✅ Fix: Enforce float
-        p_osf = float(probs * 100) if len(probs) > 2 else 0.0 # ✅ Fix: Enforce float
-        p_pwf = float(probs * 100) if len(probs) > 3 else 0.0 # ✅ Fix: Enforce float
-        p_twf = float(probs * 100) if len(probs) > 4 else 0.0 # ✅ Fix: Enforce float
+        # ✅ استخراج الأرقام بشكل آمن جداً لمنع أي أخطاء متعلقة بالمصفوفات
+        p_normal = float(probs) * 100 if len(probs) > 0 else 0.0
+        p_hdf = float(probs) * 100 if len(probs) > 1 else 0.0
+        p_osf = float(probs) * 100 if len(probs) > 2 else 0.0
+        p_pwf = float(probs) * 100 if len(probs) > 3 else 0.0
+        p_twf = float(probs) * 100 if len(probs) > 4 else 0.0
         
-        overall_risk_pct = float(100.0 - p_normal) # ✅ Fix: Enforce float
+        overall_risk_pct = 100.0 - p_normal
 
     st.markdown("### 🖥️ AI Diagnostic Summary")
     if diag_label == 'Normal':
