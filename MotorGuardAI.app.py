@@ -85,7 +85,11 @@ def logout():
     st.rerun()
 
 def create_industrial_gauge(value, title, color_theme, max_val=100):
-    safe_value = float(value)
+    try:
+        safe_value = float(value)
+    except:
+        safe_value = 0.0
+        
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = safe_value,
@@ -169,16 +173,27 @@ if analyze_btn and scaler and model:
     
     with st.spinner('MotorGuard AI Engine is analyzing patterns...'):
         prediction_raw = model.predict(processed_df)
-        diag_label = str(prediction_raw)
         
-        probs = model.predict_proba(processed_df)
+        # Safe extraction for label
+        if isinstance(prediction_raw, np.ndarray):
+            diag_label = str(prediction_raw)
+        else:
+            diag_label = str(prediction_raw)
         
-        # ✅ استخراج الأرقام بشكل آمن جداً لمنع أي أخطاء متعلقة بالمصفوفات
-        p_normal = float(probs) * 100 if len(probs) > 0 else 0.0
-        p_hdf = float(probs) * 100 if len(probs) > 1 else 0.0
-        p_osf = float(probs) * 100 if len(probs) > 2 else 0.0
-        p_pwf = float(probs) * 100 if len(probs) > 3 else 0.0
-        p_twf = float(probs) * 100 if len(probs) > 4 else 0.0
+        # Safe extraction for probabilities
+        probs_raw = model.predict_proba(processed_df)
+        if isinstance(probs_raw, list) or (isinstance(probs_raw, np.ndarray) and probs_raw.ndim == 2):
+            probs = probs_raw
+        else:
+            probs = probs_raw
+            
+        probs_len = len(probs)
+        
+        p_normal = float(probs) * 100 if probs_len > 0 else 0.0
+        p_hdf = float(probs) * 100 if probs_len > 1 else 0.0
+        p_osf = float(probs) * 100 if probs_len > 2 else 0.0
+        p_pwf = float(probs) * 100 if probs_len > 3 else 0.0
+        p_twf = float(probs) * 100 if probs_len > 4 else 0.0
         
         overall_risk_pct = 100.0 - p_normal
 
