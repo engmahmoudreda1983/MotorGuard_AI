@@ -57,9 +57,8 @@ def check_password():
             st.error("😕 Username or password incorrect.")
 
     if not st.session_state["authenticated"]:
-        # تم تعديل الأقواس هنا لتصبح دائرية لضمان الظهور والعمل
         cols = st.columns((1, 2, 1)) 
-        with cols:
+        with cols: # ✅ تم التصحيح هنا
             st.markdown("""
             <div style="background-color:#F5F5F5; padding:30px; border-radius:15px; border-bottom: 5px solid #DD4B39; text-align: center;">
                 <h1 style="color:#1E1E1E; margin:0; font-size: 50px;">MotorGuard <span style="color:#DD4B39;">AI</span></h1>
@@ -121,7 +120,6 @@ with st.sidebar:
     
     with st.expander("🛠️ Motor Quality"):
         motor_type = st.selectbox("Motor Type (Quality Level)", ['L (Low)', 'M (Medium)', 'H (High)'], index=1)
-        st.markdown("*Quality ranking in terms of material strength.*")
     
     st.markdown("---")
     st.subheader("🌡️ Thermal Sensors")
@@ -167,36 +165,32 @@ if analyze_btn and scaler and model:
         status_color = "#00A65A"
         status_bg = "#E8F5E9"
         status_title = "SYSTEM SECURE"
-        status_msg = "Current diagnosis is Normal Operation. All sensors are within safe patterns."
         sys_status_log = "Safe"
     else:
         status_color = "#DD4B39"
         status_bg = "#FDEDEC"
-        status_title = "ALERT: INTERVENTION REQUIRED"
-        status_msg = f"Potential imminent failure detected: **{prediction_label.upper()}**."
+        status_title = f"ALERT: {prediction_label.upper()}"
         sys_status_log = "Critical"
 
     st.markdown(f"""
     <div style="background-color:{status_bg}; padding:20px; border-radius:10px; border: 2px solid {status_color};">
         <h3 style="color:{status_color}; margin:0;">{status_title}</h3>
-        <p style="font-size: 16px; margin-top: 5px;">{status_msg}</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 📊 Live Telemetry & Advanced Analysis")
+    st.markdown("### 📊 Live Telemetry")
     
-    # تم تعديل الأقواس هنا لتصبح دائرية (1, 1, 1, 2)
     g_cols = st.columns((1, 1, 1, 2)) 
     
-    with g_cols:
+    with g_cols: # ✅ تصحيح الترقيم
         st.plotly_chart(create_industrial_gauge(tool_wear, "Tool Wear", "min", 260, {'warn': 150, 'danger': 200, 'critical': 240}), use_container_width=True)
-    with g_cols:
+    with g_cols: # ✅ تصحيح الترقيم
         st.plotly_chart(create_industrial_gauge(air_temp, "Air Temp", "K", 310, {'warn': 301, 'danger': 303, 'critical': 305}), use_container_width=True)
-    with g_cols:
+    with g_cols: # ✅ تصحيح الترقيم
         st.plotly_chart(create_industrial_gauge(process_temp, "Process Temp", "K", 320, {'warn': 310, 'danger': 315, 'critical': 318}), use_container_width=True)
-    with g_cols:
-        st.plotly_chart(create_industrial_gauge(overall_failure_risk_pct, "OVERALL FAILURE RISK", "%", 100, {'warn': 25, 'danger': 50, 'critical': 80}), use_container_width=True)
+    with g_cols: # ✅ تصحيح الترقيم
+        st.plotly_chart(create_industrial_gauge(overall_failure_risk_pct, "OVERALL RISK", "%", 100, {'warn': 25, 'danger': 50, 'critical': 80}), use_container_width=True)
 
     st.markdown("---")
     st.markdown("### 📈 AI Root Cause Analysis")
@@ -214,8 +208,6 @@ if analyze_btn and scaler and model:
     }])
     st.session_state['inspection_log'] = pd.concat([new_log_raw, st.session_state['inspection_log']], ignore_index=True)
 
-    st.download_button(label="📥 Download Diagnostic Report (TXT)", data=f"Diagnosis: {prediction_label}\nRisk: {overall_failure_risk_pct:.1f}%", file_name="MotorGuard_Report.txt")
-
 # =========================================
 # 7. INSPECTION HISTORY LOG
 # =========================================
@@ -223,10 +215,8 @@ st.markdown("---")
 st.markdown("### 📋 Automated Inspection Log")
 if not st.session_state['inspection_log'].empty:
     st.dataframe(st.session_state['inspection_log'], use_container_width=True)
-else:
-    st.info("No active inspection history available.")
 
 # =========================================
-# 8. INDUSTRIAL FOOTER & RIGHTS
+# 8. INDUSTRIAL FOOTER
 # =========================================
 st.markdown("<hr><div style='text-align: center; color: #888888; font-size: 11px;'>⚙️ MotorGuard AI Pro | Developed by Eng. Mahmoud © 2026</div>", unsafe_allow_html=True)
