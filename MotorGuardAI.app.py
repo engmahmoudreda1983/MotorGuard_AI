@@ -12,7 +12,7 @@ import joblib
 from datetime import datetime
 
 # =========================================
-# 1. PAGE SETUP
+# 1. PAGE SETUP & THEME
 # =========================================
 st.set_page_config(page_title="MotorGuard AI Pro", page_icon="⚙️", layout="wide", initial_sidebar_state="expanded")
 
@@ -24,7 +24,7 @@ st.markdown("""
         border-radius: 10px;
         border-left: 8px solid #DD4B39;
         color: white;
-        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -45,26 +45,32 @@ def load_ai_assets():
         model = joblib.load('motorguard_model.pkl')
         return scaler, model
     except Exception as e:
-        st.error(f"⚠️ Error loading AI files: {e}")
+        st.error(f"⚠️ Error loading AI files: scaler.pkl, motorguard_model.pkl. Details: {e}")
         return None, None
 
 scaler, model = load_ai_assets()
 
 # =========================================
-# 3. AUTHENTICATION & GAUGES
+# 3. HELPER FUNCTIONS & AUTHENTICATION
 # =========================================
 def check_password():
-    if st.session_state["authenticated"]: return True
+    if st.session_state["authenticated"]:
+        return True
+
     col1, col2, col3 = st.columns((1.5, 2.0, 1.5)) 
+    
     with col2: 
         st.markdown("""
-        <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; margin-top: 50px;">
-            <h2 style="color:#1E1E1E;">MotorGuard <span style="color:#DD4B39;">AI</span></h2>
-            <p style="color:#666;">Secure Industrial Portal</p>
-        </div><br>
+        <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;">
+            <h2 style="color:#1E1E1E; margin-bottom: 5px;">MotorGuard <span style="color:#DD4B39;">AI</span></h2>
+            <p style="color:#666666; font-size: 14px; margin-bottom: 20px;">Secure Industrial Portal</p>
+        </div>
         """, unsafe_allow_html=True)
-        user = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        user = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
         if st.button("Login securely", use_container_width=True, type="primary"):
             if user == "admin" and password == "DBA2026":
                 st.session_state["authenticated"] = True
@@ -73,121 +79,217 @@ def check_password():
                 st.error("❌ Incorrect Username or Password")
     return False
 
-def create_gauge(value, title, color, max_val=100):
-    val = float(value)
+def logout():
+    st.session_state["authenticated"] = False
+    st.rerun()
+
+def create_industrial_gauge(value, title, color_theme, max_val=100):
+    try:
+        safe_value = float(value)
+    except:
+        safe_value = 0.0
+        
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
-        value = val,
-        number = {'suffix': "%", 'font': {'size': 20, 'color': color}},
-        title = {'text': title, 'font': {'size': 13}},
+        value = safe_value,
+        number = {'suffix': "%", 'font': {'size': 24, 'color': color_theme}},
+        title = {'text': title, 'font': {'size': 14, 'color': '#555'}},
         gauge = {
-            'axis': {'range': [0, max_val]},
-            'bar': {'color': color},
+            'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue"},
+            'bar': {'color': color_theme},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
             'steps': [
-                {'range':, 'color': '#E8F5E9'},
-                {'range':, 'color': '#FEF9E7'},
-                {'range':, 'color': '#FDEDEC'}
+                {'range': (0, 40), 'color': '#E8F5E9'},  # ✅ تم إصلاح الخطأ هنا
+                {'range': (40, 75), 'color': '#FEF9E7'},  # ✅ تم إصلاح الخطأ هنا
+                {'range': (75, 100), 'color': '#FDEDEC'}  # ✅ تم إصلاح الخطأ هنا
             ],
-            'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.75, 'value': val}
+            'threshold': {
+                'line': {'color': "black", 'width': 3},
+                'thickness': 0.75,
+                'value': safe_value}
         }))
-    fig.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10))
+    fig.update_layout(height=200, margin=dict(l=15, r=15, t=35, b=10), paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
 # =========================================
-# 4. MAIN APP
+# 4. MAIN APP EXECUTION
 # =========================================
-if not check_password(): st.stop()
+if not check_password():
+    st.stop()
 
-st.markdown('<div class="main-header"><h2>⚙️ MotorGuard AI <span style="color:#DD4B39;">Pro</span></h2><p style="color:#CCC;">Industrial Predictive Maintenance Dashboard V2.0</p></div>', unsafe_allow_html=True)
+# --- Header ---
+st.markdown("""
+<div class="main-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="margin:0;">⚙️ MotorGuard AI <span style="color:#DD4B39;">Pro</span></h2>
+            <p style="margin:0; font-size: 14px; color:#CCCCCC;">Industrial Predictive Maintenance Dashboard V2.0</p>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
+# --- Sidebar Inputs ---
 with st.sidebar:
     st.markdown("### 🎛️ SCADA Telemetry")
-    motor_type = st.selectbox("Motor Quality", ['L (Low)', 'M (Medium)', 'H (High)'], index=1)
+    motor_type = st.selectbox("Motor Quality Grade", ['L (Low)', 'M (Medium)', 'H (High)'], index=1)
+    
     st.markdown("---")
-    air_temp = st.number_input("Air Temp [K]", 290.0, 310.0, 298.0, step=0.1)
-    process_temp = st.number_input("Process Temp [K]", 300.0, 320.0, 308.0, step=0.1)
+    st.markdown("#### 🌡️ Temperature")
+    air_temp = st.number_input("Air Temp [K]", min_value=290.0, max_value=310.0, value=298.0, step=0.1)
+    process_temp = st.number_input("Process Temp [K]", min_value=300.0, max_value=320.0, value=308.0, step=0.1)
+    
     st.markdown("---")
-    rpm = st.slider("Speed [RPM]", 1100, 2900, 1500, step=10)
-    torque = st.slider("Torque [Nm]", 10.0, 80.0, 40.0, step=0.5)
-    tool_wear = st.slider("Tool Wear [min]", 0, 260, 50, step=1)
+    st.markdown("#### ⚙️ Mechanical")
+    rpm = st.slider("Rotational Speed [RPM]", min_value=1100, max_value=2900, value=1500, step=10)
+    torque = st.slider("Torque [Nm]", min_value=10.0, max_value=80.0, value=40.0, step=0.5)
+    tool_wear = st.slider("Tool Wear [min]", min_value=0, max_value=260, value=50, step=1)
+    
     st.markdown("---")
     analyze_btn = st.button("🔍 Run Full Diagnostics", use_container_width=True, type="primary")
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state["authenticated"] = False
-        st.rerun()
+    
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    if st.button("🚪 Secure Logout", use_container_width=True):
+        logout()
 
+# --- Analysis & Dashboard ---
 if analyze_btn and scaler and model:
-    # 1. AI Prediction (Overall Risk)
-    t_map = {'L (Low)': 0, 'M (Medium)': 1, 'H (High)': 2}
-    raw_df = pd.DataFrame([[t_map[motor_type], air_temp, process_temp, rpm, torque, tool_wear]], 
-                          columns=['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]'])
-    
-    scaled = raw_df.copy()
-    scaled.iloc[:, 1:] = scaler.transform(raw_df.iloc[:, 1:])
-    
-    prediction = model.predict(scaled)
-    probs = model.predict_proba(scaled)
-    
-    # Calculate Overall Risk from AI
-    overall_risk = float(100.0 - (probs * 100))
-    diag_label = "NORMAL" if overall_risk < 40 else "FAILURE PREDICTED"
-    
-    # 2. Expert System (Physical Equations for specific gauges so they MOVE!)
-    # HDF (Heat Failure): Driven by temperature difference
-    temp_diff = process_temp - air_temp
-    p_hdf = max(0.0, min(100.0, (temp_diff - 8.0) * 12.5)) if process_temp > 308 else 0.0
-    
-    # TWF (Wear Failure): Driven by tool wear
-    p_twf = max(0.0, min(100.0, (tool_wear / 240.0) * 100.0))
-    
-    # OSF (Overstrain): Driven by Torque and Wear
-    p_osf = max(0.0, min(100.0, ((torque * tool_wear) / 16000.0) * 100.0))
-    
-    # PWF (Power): Driven by Power (Torque * RPM)
-    power = torque * rpm
-    p_pwf = max(0.0, min(100.0, abs(power - 60000) / 20000.0 * 100.0)) if power > 70000 or power < 50000 else 0.0
-
-    # 3. Dynamic UI Update
-    if overall_risk < 40:
-        c_bg, c_border, c_text, status = "#E8F5E9", "#00A65A", "✅ SYSTEM STATUS: NORMAL", "Safe"
-    elif overall_risk < 75:
-        c_bg, c_border, c_text, status = "#FEF9E7", "#F39C12", f"⚠️ WARNING: RISK AT {overall_risk:.1f}%", "Warning"
-    else:
-        c_bg, c_border, c_text, status = "#FDEDEC", "#DD4B39", "🚨 DANGER: IMMINENT FAILURE", "Critical"
-
-    st.markdown(f'<div style="background-color:{c_bg}; border:2px solid {c_border}; padding:15px; border-radius:10px; text-align:center;"><h2 style="color:{c_border}; margin:0;">{c_text}</h2></div>', unsafe_allow_html=True)
-    st.markdown("---")
-
-    # Gauges that actually MOVE!
-    st.markdown("### 📊 Failure Probability Analysis (Real-time)")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: st.plotly_chart(create_gauge(overall_risk, "OVERALL RISK", "#1E1E1E"), use_container_width=True)
-    with c2: st.plotly_chart(create_gauge(p_hdf, "Heat (HDF)", "#E67E22"), use_container_width=True)
-    with c3: st.plotly_chart(create_gauge(p_osf, "Overstrain (OSF)", "#9B59B6"), use_container_width=True)
-    with c4: st.plotly_chart(create_gauge(p_pwf, "Power (PWF)", "#E74C3C"), use_container_width=True)
-    with c5: st.plotly_chart(create_gauge(p_twf, "Wear (TWF)", "#34495E"), use_container_width=True)
-
-    # 4. Dynamic Bar Chart (Moves with Sliders!)
-    st.markdown("---")
-    st.markdown("### 📈 Live Sensor Stress Impact")
-    
-    impact_data = pd.DataFrame({
-        'Sensor Parameter': ['Process Temp', 'Air Temp', 'Tool Wear', 'RPM', 'Torque'],
-        'Stress Level (%)': [p_hdf, p_hdf*0.8, p_twf, p_pwf*0.6, p_osf*0.9] # Linked to actual physics
+    type_dict = {'L (Low)': 0, 'M (Medium)': 1, 'H (High)': 2}
+    raw_df = pd.DataFrame({
+        'Type': [type_dict.get(motor_type, 1)],
+        'Air temperature [K]': [air_temp],
+        'Process temperature [K]': [process_temp],
+        'Rotational speed [rpm]': [rpm],
+        'Torque [Nm]': [torque],
+        'Tool wear [min]': [tool_wear]
     })
-    # Ensure minimum visibility
-    impact_data['Stress Level (%)'] = impact_data['Stress Level (%)'] + 5.0 
-    impact_data = impact_data.sort_values(by='Stress Level (%)', ascending=True)
+    
+    cols_to_scale = ['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
+    processed_df = raw_df.copy()
+    processed_df[cols_to_scale] = scaler.transform(raw_df[cols_to_scale])
+    
+    with st.spinner('MotorGuard AI Engine is analyzing patterns...'):
+        
+        # التنبؤ المباشر
+        prediction_matrix = getattr(model, 'predict')(processed_df)
+        diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
+        
+        # استخراج الاحتمالات مباشرة من الموديل الاحترافي الخاص بك
+        probs_matrix = getattr(model, 'predict_proba')(processed_df)
+        probs_list = np.array(probs_matrix).flatten().tolist()
+        
+        # ربط الاحتمالات بأسماء الفئات (Classes) من الموديل نفسه
+        if hasattr(model, 'classes_'):
+            classes = [str(c).strip().upper() for c in getattr(model, 'classes_')]
+            probs_dict = dict(zip(classes, probs_list))
+            
+            # حساب نسبة الخطورة بناءً على الفئات المتاحة
+            p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
+            
+            # حساب احتمالات الأعطال المحددة (والتي قمت أنت بتعريفها في الموديل)
+            p_hdf = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
+            p_osf = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
+            p_pwf = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
+            p_twf = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
+            
+            # الخطر الكلي هو المكمل لنسبة الحالة الطبيعية (Normal)
+            overall_risk_pct = 100.0 - p_normal
+        else:
+            p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
+            p_hdf = p_osf = p_pwf = p_twf = 0.0
+            overall_risk_pct = 100.0 - p_normal
 
-    fig_bar = px.bar(impact_data, x='Stress Level (%)', y='Sensor Parameter', orientation='h', color_discrete_sequence=['#3498DB'])
-    fig_bar.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10))
+    st.markdown("### 🖥️ AI Diagnostic Summary")
+    
+    # تحديد الحالة والألوان
+    if overall_risk_pct < 40.0:
+        status_color = "#00A65A" 
+        status_bg = "#E8F5E9"
+        status_title = "✅ SYSTEM STATUS: NORMAL"
+        sys_status = "Safe"
+    elif overall_risk_pct < 75.0:
+        status_color = "#F39C12" 
+        status_bg = "#FEF9E7"
+        status_title = f"⚠️ WARNING: ELEVATED RISK ({overall_risk_pct:.1f}%)"
+        sys_status = "Warning"
+    else:
+        status_color = "#DD4B39" 
+        status_bg = "#FDEDEC"
+        display_label = diag_label if diag_label.upper() != 'NORMAL' else 'FAILURE PREDICTED'
+        status_title = f"🚨 DANGER DETECTED: {display_label}"
+        sys_status = "Danger"
+        
+    st.markdown(f"""
+    <div style="background-color:{status_bg}; border: 2px solid {status_color}; padding: 15px; border-radius: 10px; text-align: center;">
+        <h2 style="color:{status_color}; margin:0;">{status_title}</h2>
+        <p style="color:#555; font-size:16px; margin:0;">Real-time SCADA Assessment</p>
+    </div>
+    """, unsafe_allow_html=True)
+        
+    st.markdown("---")
+
+    st.markdown("### 📊 Failure Probability Analysis")
+    st.markdown("*(Real-time breakdown of potential failure modes based on AI model predictions)*")
+    
+    # رسم العدادات باستخدام البيانات المستخرجة من الموديل مباشرة
+    g1, g2, g3, g4, g5 = st.columns(5)
+    
+    with g1:
+        st.plotly_chart(create_industrial_gauge(overall_risk_pct, "OVERALL RISK", "#1E1E1E"), use_container_width=True)
+    with g2:
+        st.plotly_chart(create_industrial_gauge(p_hdf, "Heat (HDF)", "#E67E22"), use_container_width=True)
+    with g3:
+        st.plotly_chart(create_industrial_gauge(p_osf, "Overstrain (OSF)", "#9B59B6"), use_container_width=True)
+    with g4:
+        st.plotly_chart(create_industrial_gauge(p_pwf, "Power (PWF)", "#E74C3C"), use_container_width=True)
+    with g5:
+        st.plotly_chart(create_industrial_gauge(p_twf, "Wear (TWF)", "#34495E"), use_container_width=True)
+        
+    st.markdown("---")
+    st.markdown("### 📈 Live Feature Impact Analysis")
+    st.markdown("*(Shows the probability distribution of different failure types)*")
+    
+    # رسم بياني ديناميكي يعتمد على احتمالات الموديل
+    impact_data = pd.DataFrame({
+        'Failure Mode': ['Heat (HDF)', 'Overstrain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)'],
+        'Probability (%)': [p_hdf, p_osf, p_pwf, p_twf]
+    }).sort_values(by='Probability (%)', ascending=True)
+
+    fig_bar = px.bar(impact_data, x='Probability (%)', y='Failure Mode', orientation='h', color_discrete_sequence=['#3498DB'])
+    fig_bar.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Log Update
-    new_log = pd.DataFrame([[datetime.now().strftime("%H:%M:%S"), motor_type, rpm, f"{overall_risk:.1f}%", diag_label, status]], columns=st.session_state.inspection_log.columns)
-    st.session_state.inspection_log = pd.concat([new_log, st.session_state.inspection_log], ignore_index=True)
+    motor_short_name = str(motor_type).split(' ').pop(0)
 
+    new_log_raw = pd.DataFrame([{
+        'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'Motor Type': motor_short_name,
+        'Speed (RPM)': rpm,
+        'Overall Risk': f"{overall_risk_pct:.1f}%",
+        'Diagnosis': diag_label,
+        'Status': sys_status
+    }])
+    st.session_state.inspection_log = pd.concat([new_log_raw, st.session_state.inspection_log], ignore_index=True)
+
+# =========================================
+# 5. INSPECTION HISTORY
+# =========================================
 st.markdown("---")
 st.markdown("### 📋 Automated Inspection Log")
-st.dataframe(st.session_state.inspection_log, use_container_width=True, hide_index=True)
-st.markdown("<hr><center><p style='color:#888;'>MotorGuard AI Pro V2.0 | © 2026 Eng. Mahmoud</p></center>", unsafe_allow_html=True)
+if not st.session_state.inspection_log.empty:
+    st.dataframe(st.session_state.inspection_log, use_container_width=True, hide_index=True)
+else:
+    st.info("No active inspection history available in the current session. Run a diagnostic to see logs.")
+
+# =========================================
+# 6. FOOTER
+# =========================================
+st.markdown("""
+<br><hr>
+<div style='text-align: center; color: #888888; font-size: 12px; font-family: sans-serif;'>
+    <strong>MotorGuard AI Pro</strong> | Industrial Diagnostics Engine V2.0<br>
+    Developed by <strong>Eng. Mahmoud</strong> © 2026. All Rights Reserved.
+</div>
+""", unsafe_allow_html=True)
