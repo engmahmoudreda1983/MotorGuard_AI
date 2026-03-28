@@ -172,28 +172,19 @@ if analyze_btn and scaler and model:
     processed_df[cols_to_scale] = scaler.transform(raw_df[cols_to_scale])
     
     with st.spinner('MotorGuard AI Engine is analyzing patterns...'):
-        prediction_raw = model.predict(processed_df)
+        # 1. Safe extraction of the diagnosis label
+        prediction_raw = np.array(model.predict(processed_df)).flatten()
+        diag_label = str(prediction_raw)
         
-        # Safe extraction for label
-        if isinstance(prediction_raw, np.ndarray):
-            diag_label = str(prediction_raw)
-        else:
-            diag_label = str(prediction_raw)
+        # 2. BULLETPROOF probabilities extraction using .flatten()
+        probs_array = np.array(model.predict_proba(processed_df)).flatten()
+        probs_len = len(probs_array)
         
-        # Safe extraction for probabilities
-        probs_raw = model.predict_proba(processed_df)
-        if isinstance(probs_raw, list) or (isinstance(probs_raw, np.ndarray) and probs_raw.ndim == 2):
-            probs = probs_raw
-        else:
-            probs = probs_raw
-            
-        probs_len = len(probs)
-        
-        p_normal = float(probs) * 100 if probs_len > 0 else 0.0
-        p_hdf = float(probs) * 100 if probs_len > 1 else 0.0
-        p_osf = float(probs) * 100 if probs_len > 2 else 0.0
-        p_pwf = float(probs) * 100 if probs_len > 3 else 0.0
-        p_twf = float(probs) * 100 if probs_len > 4 else 0.0
+        p_normal = float(probs_array) * 100.0 if probs_len > 0 else 0.0
+        p_hdf = float(probs_array) * 100.0 if probs_len > 1 else 0.0
+        p_osf = float(probs_array) * 100.0 if probs_len > 2 else 0.0
+        p_pwf = float(probs_array) * 100.0 if probs_len > 3 else 0.0
+        p_twf = float(probs_array) * 100.0 if probs_len > 4 else 0.0
         
         overall_risk_pct = 100.0 - p_normal
 
