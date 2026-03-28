@@ -62,7 +62,7 @@ def check_password():
     password = st.text_input("Password", type="password")
     
     if st.button("Login"):
-        if user == "user" and password == "pass":
+        if user == "admin" and password == "DBA2026":
             st.session_state["authenticated"] = True
             st.rerun()
         else:
@@ -129,7 +129,7 @@ if analyze_btn and scaler and model:
         <h3 style="color:{color};">Status: {diag.upper()}</h3>
     </div>""", unsafe_allow_html=True)
 
-    # Gauges Row - Fixed using integer for columns
+    # Gauges Row - Using integer for columns to avoid spec errors
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.plotly_chart(create_industrial_gauge(wear, "Wear", "min", 260, {'warn':150, 'danger':200, 'critical':240}), use_container_width=True)
     with c2: st.plotly_chart(create_industrial_gauge(air_temp, "Air T", "K", 310, {'warn':301, 'danger':303, 'critical':305}), use_container_width=True)
