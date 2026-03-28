@@ -189,11 +189,16 @@ if analyze_btn and scaler and model:
             p_pwf_raw = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
             p_twf_raw = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
             
-            # الخطر الكلي
-            overall_risk_pct = 100.0 - p_normal
+            # الخطر الكلي الأولي
+            raw_overall_risk = 100.0 - p_normal
+            
+            # ✅ دالة التكبير المتقدمة (عشان نقفل الـ 100% لو الخطر عدى 85%)
+            if raw_overall_risk >= 85.0:
+                overall_risk_pct = 100.0
+            else:
+                overall_risk_pct = raw_overall_risk
 
-            # ✅ التكبير الذكي (Smart Normalization):
-            # بنشوف مين أعلى عطل الموديل توقعه، وبنكبره عشان يساوي الخطر الكلي، وباقي الأعطال بتكبر معاه.
+            # تكبير باقي العدادات لتتناسب مع الخطر الكلي
             max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
             if max_fault > 0:
                 scale_factor = overall_risk_pct / max_fault
