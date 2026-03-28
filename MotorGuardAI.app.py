@@ -37,15 +37,8 @@ def load_ai_assets():
 
 scaler, model = load_ai_assets()
 
-# --- Feature Importance Data ---
-data_pattern_importances = pd.DataFrame({
-    'Feature': ['Torque', 'RPM', 'Wear', 'AirTemp', 'ProcTemp', 'Type'],
-    'Impact': [0.3111, 0.2973, 0.2063, 0.1020, 0.0658, 0.0174]
-})
-data_pattern_importances = data_pattern_importances.sort_values(by='Impact', ascending=True)
-
 # =========================================
-# 3. AUTHENTICATION (SIMPLIFIED)
+# 3. AUTHENTICATION & LOGOUT
 # =========================================
 def check_password():
     if st.session_state["authenticated"]:
@@ -58,16 +51,20 @@ def check_password():
     </div>
     """, unsafe_allow_html=True)
     
-    user = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    user = st.text_input("Username", key="login_user")
+    password = st.text_input("Password", type="password", key="login_pass")
     
     if st.button("Login"):
-        if user == "admin" and password == "DBA2026":
+        if user == "user" and password == "pass":
             st.session_state["authenticated"] = True
             st.rerun()
         else:
             st.error("❌ Incorrect credentials")
     return False
+
+def logout():
+    st.session_state["authenticated"] = False
+    st.rerun()
 
 def create_industrial_gauge(value, title, unit, max_val, thresholds):
     fig = go.Figure(go.Indicator(
@@ -93,13 +90,15 @@ if not check_password():
 
 # Header
 st.markdown("""
-<div style="background-color:#1E1E1E; padding:15px; border-radius:10px; border-left: 8px solid #DD4B39;">
-    <h1 style="color:white; margin:0;">⚙️ MotorGuard AI <span style="color:#DD4B39;">Pro</span></h1>
-    <p style="color:#B0B0B0; margin:0;">Industrial Predictive Maintenance V1.0 | © 2026 Eng. Mahmoud</p>
+<div style="background-color:#1E1E1E; padding:15px; border-radius:10px; border-left: 8px solid #DD4B39; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h2 style="color:white; margin:0;">⚙️ MotorGuard AI <span style="color:#DD4B39;">Pro</span></h2>
+        <p style="color:#B0B0B0; margin:0; font-size: 14px;">Industrial Predictive Maintenance | © 2026 Eng. Mahmoud</p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar
+# Sidebar with Logout
 with st.sidebar:
     st.header("🎛️ SCADA Inputs")
     motor_type = st.selectbox("Motor Type", ['L (Low)', 'M (Medium)', 'H (High)'], index=1)
@@ -108,7 +107,12 @@ with st.sidebar:
     rpm = st.slider("Speed [RPM]", 1100, 2900, 1500)
     torque = st.slider("Torque [Nm]", 10.0, 80.0, 40.0)
     wear = st.slider("Tool Wear [min]", 0, 260, 50)
+    
     analyze_btn = st.button("🔍 Run Analysis", type="primary", use_container_width=True)
+    
+    st.markdown("---")
+    if st.button("🚪 Logout", use_container_width=True):
+        logout()
 
 # Analysis Logic
 if analyze_btn and scaler and model:
@@ -119,7 +123,10 @@ if analyze_btn and scaler and model:
     scaled = raw.copy()
     scaled.iloc[:, 1:] = scaler.transform(raw.iloc[:, 1:])
     
-    diag = model.predict(scaled)
+    # ✅ حل مشكلة الـ AttributeError (نضمن أن diag هو نص)
+    prediction = model.predict(scaled)
+    diag = str(prediction) 
+    
     prob = model.predict_proba(scaled)
     risk = sum(prob[1:]) * 100
 
@@ -129,7 +136,7 @@ if analyze_btn and scaler and model:
         <h3 style="color:{color};">Status: {diag.upper()}</h3>
     </div>""", unsafe_allow_html=True)
 
-    # Gauges Row - Using integer for columns to avoid spec errors
+    # Gauges Row
     c1, c2, c3, c4 = st.columns(4)
     with c1: st.plotly_chart(create_industrial_gauge(wear, "Wear", "min", 260, {'warn':150, 'danger':200, 'critical':240}), use_container_width=True)
     with c2: st.plotly_chart(create_industrial_gauge(air_temp, "Air T", "K", 310, {'warn':301, 'danger':303, 'critical':305}), use_container_width=True)
@@ -147,4 +154,4 @@ st.subheader("📋 Inspection History")
 st.dataframe(st.session_state['inspection_log'], use_container_width=True)
 
 # Footer
-st.markdown("<hr><div style='text-align:center; color:#888;'>Developed by Eng. Mahmoud © 2026</div>", unsafe_allow_html=True)
+st.markdown("<hr><div style='text-align:center; color:#888;'>MotorGuard AI Pro | Developed by Eng. Mahmoud © 2026</div>", unsafe_allow_html=True)
