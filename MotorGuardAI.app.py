@@ -15,7 +15,6 @@ from datetime import datetime
 # =========================================
 st.set_page_config(page_title="MotorGuard AI Pro", page_icon="⚙️", layout="wide", initial_sidebar_state="expanded")
 
-# CSS to make the app look highly professional
 st.markdown("""
     <style>
     .main-header {
@@ -59,7 +58,7 @@ def check_password():
     if st.session_state["authenticated"]:
         return True
 
-    cols = st.columns([1.5, 2, 1.5]) 
+    cols = st.columns((1.5, 2.0, 1.5)) 
     with cols: 
         st.markdown("""
         <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;">
@@ -84,7 +83,6 @@ def logout():
     st.session_state["authenticated"] = False
     st.rerun()
 
-# ✅ هنا تم تصليح السطر الذي كان يسبب المشكلة (تم وضع الأرقام بعد كلمة range)
 def create_industrial_gauge(value, title, color_theme, max_val=100):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
@@ -92,15 +90,15 @@ def create_industrial_gauge(value, title, color_theme, max_val=100):
         number = {'suffix': "%", 'font': {'size': 24, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 14, 'color': '#555'}},
         gauge = {
-            'axis': {'range': [0, max_val], 'tickwidth': 1, 'tickcolor': "darkblue"},
+            'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue"},
             'bar': {'color': color_theme},
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
             'steps': [
-                {'range':, 'color': 'rgba(0, 166, 90, 0.1)'},
-                {'range':, 'color': 'rgba(243, 156, 18, 0.1)'},
-                {'range':, 'color': 'rgba(221, 75, 57, 0.1)'}
+                {'range': (0, 40), 'color': 'rgba(0, 166, 90, 0.1)'},
+                {'range': (40, 75), 'color': 'rgba(243, 156, 18, 0.1)'},
+                {'range': (75, 100), 'color': 'rgba(221, 75, 57, 0.1)'}
             ],
             'threshold': {
                 'line': {'color': "red", 'width': 3},
