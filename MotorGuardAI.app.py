@@ -85,14 +85,9 @@ def logout():
     st.rerun()
 
 def create_industrial_gauge(value, title, color_theme, max_val=100):
-    try:
-        safe_value = float(value)
-    except:
-        safe_value = 0.0
-        
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
-        value = safe_value,
+        value = value,
         number = {'suffix': "%", 'font': {'size': 24, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 14, 'color': '#555'}},
         gauge = {
@@ -109,7 +104,7 @@ def create_industrial_gauge(value, title, color_theme, max_val=100):
             'threshold': {
                 'line': {'color': "red", 'width': 3},
                 'thickness': 0.75,
-                'value': safe_value}
+                'value': value}
         }))
     fig.update_layout(height=200, margin=dict(l=15, r=15, t=35, b=10), paper_bgcolor="rgba(0,0,0,0)")
     return fig
@@ -172,19 +167,19 @@ if analyze_btn and scaler and model:
     processed_df[cols_to_scale] = scaler.transform(raw_df[cols_to_scale])
     
     with st.spinner('MotorGuard AI Engine is analyzing patterns...'):
-        # 1. Safe extraction of the diagnosis label
-        prediction_raw = np.array(model.predict(processed_df)).flatten()
-        diag_label = str(prediction_raw)
+        # التنبؤ الأساسي
+        prediction_matrix = model.predict(processed_df)
+        diag_label = str(prediction_matrix) if isinstance(prediction_matrix, np.ndarray) else str(prediction_matrix)
         
-        # 2. BULLETPROOF probabilities extraction using .flatten()
-        probs_array = np.array(model.predict_proba(processed_df)).flatten()
-        probs_len = len(probs_array)
+        # ✅ الحل الجذري الأخير: تحويل مخرجات الموديل لقائمة بايثون عادية (List) لمنع أي خطأ
+        probs_matrix = model.predict_proba(processed_df)
+        probs_list = probs_matrix.tolist() 
         
-        p_normal = float(probs_array) * 100.0 if probs_len > 0 else 0.0
-        p_hdf = float(probs_array) * 100.0 if probs_len > 1 else 0.0
-        p_osf = float(probs_array) * 100.0 if probs_len > 2 else 0.0
-        p_pwf = float(probs_array) * 100.0 if probs_len > 3 else 0.0
-        p_twf = float(probs_array) * 100.0 if probs_len > 4 else 0.0
+        p_normal = probs_list * 100.0 if len(probs_list) > 0 else 0.0
+        p_hdf = probs_list * 100.0 if len(probs_list) > 1 else 0.0
+        p_osf = probs_list * 100.0 if len(probs_list) > 2 else 0.0
+        p_pwf = probs_list * 100.0 if len(probs_list) > 3 else 0.0
+        p_twf = probs_list * 100.0 if len(probs_list) > 4 else 0.0
         
         overall_risk_pct = 100.0 - p_normal
 
