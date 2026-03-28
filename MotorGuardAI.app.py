@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 import joblib
 from datetime import datetime
 
@@ -25,8 +26,6 @@ st.markdown("""
         color: white;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    .status-safe { background-color: #E8F5E9; border: 2px solid #00A65A; padding: 15px; border-radius: 10px; text-align: center; }
-    .status-critical { background-color: #FDEDEC; border: 2px solid #DD4B39; padding: 15px; border-radius: 10px; text-align: center; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -50,6 +49,12 @@ def load_ai_assets():
         return None, None
 
 scaler, model = load_ai_assets()
+
+# --- Root Cause Analysis Data ---
+data_pattern_importances = pd.DataFrame({
+    'Feature': ['Motor Type', 'Process Temp', 'Air Temp', 'Tool Wear', 'RPM', 'Torque'],
+    'Impact': [0.0174, 0.0658, 0.1020, 0.2063, 0.2973, 0.3111]
+}).sort_values(by='Impact', ascending=True)
 
 # =========================================
 # 3. HELPER FUNCTIONS & AUTHENTICATION
@@ -107,7 +112,7 @@ def create_industrial_gauge(value, title, color_theme, max_val=100):
                 {'range': (75, 100), 'color': 'rgba(221, 75, 57, 0.1)'}
             ],
             'threshold': {
-                'line': {'color': "red", 'width': 3},
+                'line': {'color': "black", 'width': 3},
                 'thickness': 0.75,
                 'value': safe_value}
         }))
@@ -173,38 +178,57 @@ if analyze_btn and scaler and model:
     
     with st.spinner('MotorGuard AI Engine is analyzing patterns...'):
         
-        # ✅ استخدام item() بدلاً من الأقواس المربعة لمنع مسحها بواسطة المنصة
-        prediction_raw = np.array(model.predict(processed_df)).flatten()
-        diag_label = str(prediction_raw.item(0))
+        prediction_matrix = getattr(model, 'predict')(processed_df)
+        diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
         
-        probs_array = np.array(model.predict_proba(processed_df)).flatten()
-        probs_len = len(probs_array)
+        probs_matrix = getattr(model, 'predict_proba')(processed_df)
+        probs_list = np.array(probs_matrix).flatten().tolist()
         
-        p_normal = float(probs_array.item(0)) * 100.0 if probs_len > 0 else 0.0
-        p_hdf = float(probs_array.item(1)) * 100.0 if probs_len > 1 else 0.0
-        p_osf = float(probs_array.item(2)) * 100.0 if probs_len > 2 else 0.0
-        p_pwf = float(probs_array.item(3)) * 100.0 if probs_len > 3 else 0.0
-        p_twf = float(probs_array.item(4)) * 100.0 if probs_len > 4 else 0.0
-        
-        overall_risk_pct = 100.0 - p_normal
+        # ✅ الحل السحري: ربط الاحتمالات بأسماء الكلاسات من الموديل نفسه عشان مفيش حاجة تتبدل!
+        if hasattr(model, 'classes_'):
+            classes = [str(c).strip().upper() for c in getattr(model, 'classes_')]
+            probs_dict = dict(zip(classes, probs_list))
+            
+            p_normal = float(probs_dict.get('NORMAL', probs_dict.get('0', 0.0))) * 100.0
+            p_hdf = float(probs_dict.get('HDF', probs_dict.get('1', 0.0))) * 100.0
+            p_osf = float(probs_dict.get('OSF', probs_dict.get('2', 0.0))) * 100.0
+            p_pwf = float(probs_dict.get('PWF', probs_dict.get('3', 0.0))) * 100.0
+            p_twf = float(probs_dict.get('TWF', probs_dict.get('4', 0.0))) * 100.0
+            
+            overall_risk_pct = 100.0 - p_normal
+        else:
+            # Fallback
+            p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
+            p_hdf = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
+            p_osf, p_pwf, p_twf = 0.0, 0.0, 0.0
+            overall_risk_pct = 100.0 - p_normal
 
     st.markdown("### 🖥️ AI Diagnostic Summary")
-    if diag_label == 'Normal':
-        st.markdown(f"""
-        <div class="status-safe">
-            <h2 style="color:#00A65A; margin:0;">✅ SYSTEM STATUS: {diag_label.upper()}</h2>
-            <p style="color:#555; font-size:16px; margin:0;">All sensor readings are within stable operational parameters.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    
+    # ✅ الألوان الديناميكية بناءً على الخطر (أخضر - أصفر - أحمر)
+    if overall_risk_pct < 40.0:
+        status_color = "#00A65A" # أخضر
+        status_bg = "#E8F5E9"
+        status_title = "✅ SYSTEM STATUS: NORMAL"
         sys_status = "Safe"
+    elif overall_risk_pct < 75.0:
+        status_color = "#F39C12" # أصفر
+        status_bg = "#FEF9E7"
+        status_title = f"⚠️ WARNING: ELEVATED RISK ({overall_risk_pct:.1f}%)"
+        sys_status = "Warning"
     else:
-        st.markdown(f"""
-        <div class="status-critical">
-            <h2 style="color:#DD4B39; margin:0;">🚨 ALERT DETECTED: {diag_label.upper()}</h2>
-            <p style="color:#555; font-size:16px; margin:0;">Immediate intervention required. Risk of failure is high.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        sys_status = "Critical"
+        status_color = "#DD4B39" # أحمر
+        status_bg = "#FDEDEC"
+        display_label = diag_label.upper() if diag_label.upper() not in ['0', 'NORMAL'] else 'FAILURE PREDICTED'
+        status_title = f"🚨 DANGER DETECTED: {display_label}"
+        sys_status = "Danger"
+        
+    st.markdown(f"""
+    <div style="background-color:{status_bg}; border: 2px solid {status_color}; padding: 15px; border-radius: 10px; text-align: center;">
+        <h2 style="color:{status_color}; margin:0;">{status_title}</h2>
+        <p style="color:#555; font-size:16px; margin:0;">Real-time SCADA Assessment</p>
+    </div>
+    """, unsafe_allow_html=True)
         
     st.markdown("---")
 
@@ -223,9 +247,15 @@ if analyze_btn and scaler and model:
         st.plotly_chart(create_industrial_gauge(p_pwf, "Power (PWF)", "#E74C3C"), use_container_width=True)
     with g5:
         st.plotly_chart(create_industrial_gauge(p_twf, "Wear (TWF)", "#34495E"), use_container_width=True)
+        
+    # ✅ الـ Bar Chart نزل تحت زي ما طلبت
+    st.markdown("---")
+    st.markdown("### 📈 AI Root Cause Analysis (Feature Impact)")
+    fig_pattern = px.bar(data_pattern_importances, x='Impact', y='Feature', orientation='h', color_discrete_sequence=['#3498DB'])
+    fig_pattern.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig_pattern, use_container_width=True)
 
-    # ✅ استخدام pop() بدلاً من الأقواس المربعة
-    motor_short_name = motor_type.split(' ').pop(0)
+    motor_short_name = motor_type.split(' ')[ 0 ]
 
     new_log_raw = pd.DataFrame([{
         'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
