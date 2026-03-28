@@ -58,7 +58,6 @@ def check_password():
     if st.session_state["authenticated"]:
         return True
 
-    # ✅ طريقة التفكيك المباشر
     col1, col2, col3 = st.columns((1.5, 2.0, 1.5)) 
     
     with col2: 
@@ -86,9 +85,10 @@ def logout():
     st.rerun()
 
 def create_industrial_gauge(value, title, color_theme, max_val=100):
+    safe_value = float(value) # ✅ Fix: Ensure value is a standard Python float
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
-        value = value,
+        value = safe_value,
         number = {'suffix': "%", 'font': {'size': 24, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 14, 'color': '#555'}},
         gauge = {
@@ -105,7 +105,7 @@ def create_industrial_gauge(value, title, color_theme, max_val=100):
             'threshold': {
                 'line': {'color': "red", 'width': 3},
                 'thickness': 0.75,
-                'value': value}
+                'value': safe_value}
         }))
     fig.update_layout(height=200, margin=dict(l=15, r=15, t=35, b=10), paper_bgcolor="rgba(0,0,0,0)")
     return fig
@@ -173,13 +173,13 @@ if analyze_btn and scaler and model:
         
         probs = model.predict_proba(processed_df)
         
-        p_normal = probs * 100 if len(probs) > 0 else 0
-        p_hdf = probs * 100 if len(probs) > 1 else 0
-        p_osf = probs * 100 if len(probs) > 2 else 0
-        p_pwf = probs * 100 if len(probs) > 3 else 0
-        p_twf = probs * 100 if len(probs) > 4 else 0
+        p_normal = float(probs * 100) if len(probs) > 0 else 0.0 # ✅ Fix: Enforce float
+        p_hdf = float(probs * 100) if len(probs) > 1 else 0.0 # ✅ Fix: Enforce float
+        p_osf = float(probs * 100) if len(probs) > 2 else 0.0 # ✅ Fix: Enforce float
+        p_pwf = float(probs * 100) if len(probs) > 3 else 0.0 # ✅ Fix: Enforce float
+        p_twf = float(probs * 100) if len(probs) > 4 else 0.0 # ✅ Fix: Enforce float
         
-        overall_risk_pct = 100.0 - p_normal
+        overall_risk_pct = float(100.0 - p_normal) # ✅ Fix: Enforce float
 
     st.markdown("### 🖥️ AI Diagnostic Summary")
     if diag_label == 'Normal':
@@ -204,7 +204,6 @@ if analyze_btn and scaler and model:
     st.markdown("### 📊 Failure Probability Analysis")
     st.markdown("*(Real-time breakdown of potential failure modes based on current telemetry)*")
     
-    # ✅ طريقة التفكيك المباشر للعدادات
     g1, g2, g3, g4, g5 = st.columns(5)
     
     with g1:
