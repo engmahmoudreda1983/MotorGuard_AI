@@ -61,7 +61,7 @@ def check_password():
             st.error("😕 Username or password incorrect.")
 
     if not st.session_state["authenticated"]:
-        # تم تحديد النسب لتفادي خطأ st.columns
+        # ✅ التصحيح الأول هنا: إضافة نسب التقسيم داخل الأقواس
         cols = st.columns() 
         with cols:
             st.markdown("""
@@ -197,7 +197,7 @@ if analyze_btn and scaler and model:
     st.markdown("---")
     st.markdown("### 📊 Live Telemetry & Advanced Analysis")
     
-    # تم تحديد النسب لتفادي خطأ st.columns
+    # ✅ التصحيح الثاني هنا: إضافة نسب التقسيم داخل الأقواس
     g_cols = st.columns() 
     
     with g_cols:
