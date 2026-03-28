@@ -58,8 +58,10 @@ def check_password():
     if st.session_state["authenticated"]:
         return True
 
-    cols = st.columns((1.5, 2.0, 1.5)) 
-    with cols: 
+    # ✅ طريقة التفكيك المباشر
+    col1, col2, col3 = st.columns((1.5, 2.0, 1.5)) 
+    
+    with col2: 
         st.markdown("""
         <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;">
             <h2 style="color:#1E1E1E; margin-bottom: 5px;">MotorGuard <span style="color:#DD4B39;">AI</span></h2>
@@ -202,17 +204,18 @@ if analyze_btn and scaler and model:
     st.markdown("### 📊 Failure Probability Analysis")
     st.markdown("*(Real-time breakdown of potential failure modes based on current telemetry)*")
     
-    g_cols = st.columns(5)
+    # ✅ طريقة التفكيك المباشر للعدادات
+    g1, g2, g3, g4, g5 = st.columns(5)
     
-    with g_cols:
+    with g1:
         st.plotly_chart(create_industrial_gauge(overall_risk_pct, "OVERALL RISK", "#1E1E1E"), use_container_width=True)
-    with g_cols:
+    with g2:
         st.plotly_chart(create_industrial_gauge(p_hdf, "Heat (HDF)", "#E67E22"), use_container_width=True)
-    with g_cols:
+    with g3:
         st.plotly_chart(create_industrial_gauge(p_osf, "Overstrain (OSF)", "#9B59B6"), use_container_width=True)
-    with g_cols:
+    with g4:
         st.plotly_chart(create_industrial_gauge(p_pwf, "Power (PWF)", "#E74C3C"), use_container_width=True)
-    with g_cols:
+    with g5:
         st.plotly_chart(create_industrial_gauge(p_twf, "Wear (TWF)", "#34495E"), use_container_width=True)
 
     new_log_raw = pd.DataFrame([{
