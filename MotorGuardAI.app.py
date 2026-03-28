@@ -58,7 +58,7 @@ def check_password():
 
     if not st.session_state["authenticated"]:
         cols = st.columns((1, 2, 1)) 
-        with cols: # ✅ تم التصحيح لاستخدام العمود الأوسط
+        with cols: # ✅ تم التصحيح هنا
             st.markdown("""
             <div style="background-color:#F5F5F5; padding:30px; border-radius:15px; border-bottom: 5px solid #DD4B39; text-align: center;">
                 <h1 style="color:#1E1E1E; margin:0; font-size: 50px;">MotorGuard <span style="color:#DD4B39;">AI</span></h1>
@@ -183,13 +183,13 @@ if analyze_btn and scaler and model:
     
     g_cols = st.columns((1, 1, 1, 2)) 
     
-    with g_cols: # ✅ تصحيح الترقيم للعمود الأول
+    with g_cols: # ✅ تم التصحيح هنا
         st.plotly_chart(create_industrial_gauge(tool_wear, "Tool Wear", "min", 260, {'warn': 150, 'danger': 200, 'critical': 240}), use_container_width=True)
-    with g_cols: # ✅ تصحيح الترقيم للعمود الثاني
+    with g_cols: # ✅ تم التصحيح هنا
         st.plotly_chart(create_industrial_gauge(air_temp, "Air Temp", "K", 310, {'warn': 301, 'danger': 303, 'critical': 305}), use_container_width=True)
-    with g_cols: # ✅ تصحيح الترقيم للعمود الثالث
+    with g_cols: # ✅ تم التصحيح هنا
         st.plotly_chart(create_industrial_gauge(process_temp, "Process Temp", "K", 320, {'warn': 310, 'danger': 315, 'critical': 318}), use_container_width=True)
-    with g_cols: # ✅ تصحيح الترقيم للعمود الرابع (المؤشر العريض)
+    with g_cols: # ✅ تم التصحيح هنا
         st.plotly_chart(create_industrial_gauge(overall_failure_risk_pct, "OVERALL RISK", "%", 100, {'warn': 25, 'danger': 50, 'critical': 80}), use_container_width=True)
 
     st.markdown("---")
