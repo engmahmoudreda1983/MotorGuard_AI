@@ -59,7 +59,6 @@ def check_password():
     if st.session_state["authenticated"]:
         return True
 
-    # Centered Login Page (Not too wide)
     cols = st.columns([1.5, 2, 1.5]) 
     with cols: 
         st.markdown("""
@@ -74,7 +73,6 @@ def check_password():
         password = st.text_input("Password", type="password", placeholder="Enter your password")
         
         if st.button("Login securely", use_container_width=True, type="primary"):
-            # Update these with your preferred username and password
             if user == "admin" and password == "DBA2026":
                 st.session_state["authenticated"] = True
                 st.rerun()
@@ -86,6 +84,7 @@ def logout():
     st.session_state["authenticated"] = False
     st.rerun()
 
+# ✅ هنا تم تصليح السطر الذي كان يسبب المشكلة (تم وضع الأرقام بعد كلمة range)
 def create_industrial_gauge(value, title, color_theme, max_val=100):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
@@ -101,7 +100,8 @@ def create_industrial_gauge(value, title, color_theme, max_val=100):
             'steps': [
                 {'range':, 'color': 'rgba(0, 166, 90, 0.1)'},
                 {'range':, 'color': 'rgba(243, 156, 18, 0.1)'},
-                {'range':, 'color': 'rgba(221, 75, 57, 0.1)'}],
+                {'range':, 'color': 'rgba(221, 75, 57, 0.1)'}
+            ],
             'threshold': {
                 'line': {'color': "red", 'width': 3},
                 'thickness': 0.75,
@@ -153,7 +153,6 @@ with st.sidebar:
 
 # --- Analysis & Dashboard ---
 if analyze_btn and scaler and model:
-    # 1. Processing
     type_dict = {'L (Low)': 0, 'M (Medium)': 1, 'H (High)': 2}
     raw_df = pd.DataFrame({
         'Type': [type_dict[motor_type]],
@@ -172,10 +171,8 @@ if analyze_btn and scaler and model:
         prediction_raw = model.predict(processed_df)
         diag_label = str(prediction_raw)
         
-        # Probabilities Mapping
         probs = model.predict_proba(processed_df)
         
-        # Mapping 6 classes logic (Normal, HDF, OSF, PWF, TWF, RNF)
         p_normal = probs * 100 if len(probs) > 0 else 0
         p_hdf = probs * 100 if len(probs) > 1 else 0
         p_osf = probs * 100 if len(probs) > 2 else 0
@@ -184,7 +181,6 @@ if analyze_btn and scaler and model:
         
         overall_risk_pct = 100.0 - p_normal
 
-    # 2. Main Status Banner
     st.markdown("### 🖥️ AI Diagnostic Summary")
     if diag_label == 'Normal':
         st.markdown(f"""
@@ -205,7 +201,6 @@ if analyze_btn and scaler and model:
         
     st.markdown("---")
 
-    # 3. Dynamic Risk Gauges (Overall + 4 Specific Failures)
     st.markdown("### 📊 Failure Probability Analysis")
     st.markdown("*(Real-time breakdown of potential failure modes based on current telemetry)*")
     
@@ -222,7 +217,6 @@ if analyze_btn and scaler and model:
     with g_cols:
         st.plotly_chart(create_industrial_gauge(p_twf, "Wear (TWF)", "#34495E"), use_container_width=True)
 
-    # 4. Log Update
     new_log_raw = pd.DataFrame([{
         'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'Motor Type': motor_type.split(' '),
