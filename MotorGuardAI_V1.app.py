@@ -112,7 +112,6 @@ def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
         number = {'suffix': "%", 'font': {'size': 20 if height<250 else 28, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 13 if height<250 else 18, 'color': '#555'}},
         gauge = {
-            # ✅ تم استبدال الأقواس المربعة بأقواس دائرية لمنع المسح
             'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue", 'tickvals': (0, 40, 75, 100)},
             'bar': {'color': color_theme},
             'bgcolor': "white",
@@ -232,26 +231,52 @@ if analyze_btn and scaler and model:
             raw_overall_risk = 100.0 - p_normal
             p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
 
-        # 2. EXPERT SYSTEM OVERRIDES (Physical fail-safes)
-        if tool_wear >= 240:
-            raw_overall_risk = max(raw_overall_risk, 95.0)
-            p_twf_raw = max(p_twf_raw, 95.0)
+        # 2. EXPERT SYSTEM OVERRIDES (Smooth Degradation Models)
+        expert_twf = 0.0
+        expert_pwf = 0.0
+        expert_osf = 0.0
+        expert_hdf = 0.0
+
+        # A. Tool Wear Degradation (TWF) - Starts warning at 200, critical at 240+
+        if tool_wear >= 200:
+            expert_twf = 50.0 + ((tool_wear - 200) / 40.0) * 45.0  # Scales from 50% to 95%
+            expert_twf = min(expert_twf, 98.0) # Cap at 98%
         
-        if (torque * rpm) > 90000:
-            raw_overall_risk = max(raw_overall_risk, 96.0)
-            p_pwf_raw = max(p_pwf_raw, 96.0)
-            
-        if (torque * tool_wear) > 12000:
-            raw_overall_risk = max(raw_overall_risk, 94.0)
-            p_osf_raw = max(p_osf_raw, 94.0)
-            
-        if (process_temp - air_temp) <= 5 and process_temp > 310:
-            raw_overall_risk = max(raw_overall_risk, 92.0)
-            p_hdf_raw = max(p_hdf_raw, 92.0)
+        # B. Power Degradation (PWF)
+        power = torque * rpm
+        if power > 75000:
+            expert_pwf = 40.0 + ((power - 75000) / 15000.0) * 55.0 # Scales from 40% up to 95%+
+            expert_pwf = min(expert_pwf, 98.0)
+        elif power < 40000:
+            expert_pwf = 40.0 + ((40000 - power) / 10000.0) * 55.0
+            expert_pwf = min(expert_pwf, 98.0)
+
+        # C. Overstrain Degradation (OSF)
+        strain = torque * tool_wear
+        strain_limit = 11000 if motor_options[motor_type] == 0 else (12000 if motor_options[motor_type] == 1 else 13000)
+        warning_limit = strain_limit * 0.8 # Warn at 80% of limit
+        if strain > warning_limit:
+            expert_osf = 40.0 + ((strain - warning_limit) / (strain_limit - warning_limit)) * 55.0
+            expert_osf = min(expert_osf, 98.0)
+
+        # D. Heat Dissipation Degradation (HDF)
+        temp_diff = process_temp - air_temp
+        if temp_diff <= 10.0 and rpm < 1500:
+            expert_hdf = 40.0 + ((10.0 - temp_diff) / 2.0) * 55.0 # Scales as diff approaches 8.0
+            expert_hdf = min(expert_hdf, 98.0)
+
+        # Merge AI with Expert System (Take the highest risk detected by either system)
+        p_twf_raw = max(p_twf_raw, expert_twf)
+        p_pwf_raw = max(p_pwf_raw, expert_pwf)
+        p_osf_raw = max(p_osf_raw, expert_osf)
+        p_hdf_raw = max(p_hdf_raw, expert_hdf)
+        
+        expert_max_risk = max(expert_twf, expert_pwf, expert_osf, expert_hdf)
+        raw_overall_risk = max(raw_overall_risk, expert_max_risk)
 
         # 3. SMART NORMALIZATION
         if raw_overall_risk >= 80.0:
-            overall_risk_pct = 100.0
+            overall_risk_pct = min(100.0, raw_overall_risk * 1.1) # Push closer to 100 naturally
         else:
             overall_risk_pct = raw_overall_risk
 
@@ -293,7 +318,6 @@ if analyze_btn and scaler and model:
     """, unsafe_allow_html=True)
         
     # --- MIDDLE ROW: Key Metrics & Master Gauge ---
-    # ✅ تم استبدال الأقواس المربعة بأقواس دائرية لمنع المسح
     colA, colB = st.columns((1, 1.5))
     
     with colA:
