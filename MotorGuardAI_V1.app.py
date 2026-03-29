@@ -112,7 +112,8 @@ def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
         number = {'suffix': "%", 'font': {'size': 20 if height<250 else 28, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 13 if height<250 else 18, 'color': '#555'}},
         gauge = {
-            'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue", 'tickvals':},
+            # ✅ تم استبدال الأقواس المربعة بأقواس دائرية لمنع المسح
+            'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue", 'tickvals': (0, 40, 75, 100)},
             'bar': {'color': color_theme},
             'bgcolor': "white",
             'borderwidth': 2,
@@ -232,7 +233,6 @@ if analyze_btn and scaler and model:
             p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
 
         # 2. EXPERT SYSTEM OVERRIDES (Physical fail-safes)
-        # Force high risk if physical constraints are clearly violated
         if tool_wear >= 240:
             raw_overall_risk = max(raw_overall_risk, 95.0)
             p_twf_raw = max(p_twf_raw, 95.0)
@@ -293,7 +293,8 @@ if analyze_btn and scaler and model:
     """, unsafe_allow_html=True)
         
     # --- MIDDLE ROW: Key Metrics & Master Gauge ---
-    colA, colB = st.columns([1, 1.5])
+    # ✅ تم استبدال الأقواس المربعة بأقواس دائرية لمنع المسح
+    colA, colB = st.columns((1, 1.5))
     
     with colA:
         st.markdown("<br>", unsafe_allow_html=True)
