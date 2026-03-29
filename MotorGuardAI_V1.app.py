@@ -8,7 +8,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 import joblib
 from datetime import datetime
 
@@ -40,7 +39,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if 'inspection_log' not in st.session_state:
-    st.session_state['inspection_log'] = pd.DataFrame(columns=['Timestamp', 'Motor Type', 'Speed (RPM)', 'Risk Level', 'FMEA Diagnosis', 'Status'])
+    st.session_state['inspection_log'] = pd.DataFrame(columns=['Timestamp', 'Motor Type', 'Risk Level', 'FMEA Diagnosis', 'Status', 'Recommended Action'])
 
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
@@ -130,6 +129,16 @@ def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
     fig.update_layout(height=height, margin=dict(l=15, r=15, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
+def highlight_fmea_rows(row):
+    status = row.get('Status', '')
+    if status == 'Safe':
+        return ['background-color: #E8F5E9; color: #00A65A; font-weight: bold'] * len(row)
+    elif status == 'Warning':
+        return ['background-color: #FEF9E7; color: #D35400; font-weight: bold'] * len(row)
+    elif status == 'Danger':
+        return ['background-color: #FDEDEC; color: #C0392B; font-weight: bold'] * len(row)
+    return [''] * len(row)
+
 # =========================================
 # 4. MAIN APP EXECUTION
 # =========================================
@@ -166,22 +175,22 @@ with st.sidebar:
         'H (High - Industrial Grade)': 2
     }
     motor_type = st.selectbox(
-        "Motor Quality Grade", 
+        "Motor Quality Grade ❓", 
         list(motor_options.keys()), 
         index=1,
-        help="L: Low quality (More prone to failure). M: Medium quality. H: High quality (Durable industrial grade)."
+        help="L: Low quality (More prone to failure and lower limits). M: Medium quality. H: High quality (Durable industrial grade with high tolerance)."
     )
     
     st.markdown("---")
     st.markdown("#### 🌡️ Thermal Metrics")
-    air_temp = st.number_input("Ambient Air Temp [K]", min_value=290.0, max_value=310.0, value=298.0, step=0.1, help="Temperature of the surrounding environment in Kelvin. Range: 290K - 310K.")
-    process_temp = st.number_input("Motor Core Temp [K]", min_value=300.0, max_value=320.0, value=308.0, step=0.1, help="Operating temperature of the motor core. Range: 300K - 320K. (Needs to be higher than Ambient Temp for heat dissipation).")
+    air_temp = st.number_input("Ambient Air Temp [K] ❓", min_value=290.0, max_value=310.0, value=298.0, step=0.1, help="Temperature of the surrounding environment in Kelvin. Range: 290K - 310K.")
+    process_temp = st.number_input("Motor Core Temp [K] ❓", min_value=300.0, max_value=320.0, value=308.0, step=0.1, help="Operating temperature of the motor core. Range: 300K - 320K. (Needs to be sufficiently higher than Ambient Temp for heat dissipation).")
     
     st.markdown("---")
     st.markdown("#### ⚙️ Mechanical Metrics")
-    rpm = st.slider("Rotational Speed [RPM]", min_value=1100, max_value=2900, value=1500, step=10, help="Motor shaft speed. Extreme high speeds increase Power Failure (PWF) risk.")
-    torque = st.slider("Applied Torque [Nm]", min_value=10.0, max_value=80.0, value=40.0, step=0.5, help="Twisting force applied by the motor. High torque increases Overstrain Failure (OSF) risk.")
-    tool_wear = st.slider("Tool Wear Level [min]", min_value=0, max_value=260, value=50, step=1, help="Usage duration of the attached tool. Exceeding 200 mins drastically increases Tool Wear Failure (TWF) risk.")
+    rpm = st.slider("Rotational Speed [RPM] ❓", min_value=1100, max_value=2900, value=1500, step=10, help="Motor shaft speed. Extreme high speeds combined with torque increase Power Failure (PWF) risk.")
+    torque = st.slider("Applied Torque [Nm] ❓", min_value=10.0, max_value=80.0, value=40.0, step=0.5, help="Twisting force applied by the motor. High torque combined with tool wear increases Overstrain Failure (OSF) risk.")
+    tool_wear = st.slider("Tool Wear Level [min] ❓", min_value=0, max_value=260, value=50, step=1, help="Usage duration of the attached tool. Exceeding 200 mins drastically increases Tool Wear Failure (TWF) risk.")
     
     st.markdown("---")
     analyze_btn = st.button("🔍 Run Full Diagnostics", use_container_width=True, type="primary")
@@ -208,9 +217,6 @@ if analyze_btn and scaler and model:
     with st.spinner('AI Engine & Expert Systems are analyzing patterns...'):
         
         # 1. AI PREDICTION
-        prediction_matrix = getattr(model, 'predict')(processed_df)
-        diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
-        
         probs_matrix = getattr(model, 'predict_proba')(processed_df)
         probs_list = np.array(probs_matrix).flatten().tolist()
         
@@ -237,60 +243,55 @@ if analyze_btn and scaler and model:
         expert_osf = 0.0
         expert_hdf = 0.0
 
-        # A. Tool Wear Degradation (TWF) - Starts warning at 200, critical at 240+
         if tool_wear >= 200:
-            expert_twf = 50.0 + ((tool_wear - 200) / 40.0) * 45.0  # Scales from 50% to 95%
-            expert_twf = min(expert_twf, 98.0) # Cap at 98%
+            expert_twf = 50.0 + ((tool_wear - 200) / 40.0) * 45.0
+            expert_twf = min(expert_twf, 98.0)
         
-        # B. Power Degradation (PWF)
         power = torque * rpm
         if power > 75000:
-            expert_pwf = 40.0 + ((power - 75000) / 15000.0) * 55.0 # Scales from 40% up to 95%+
+            expert_pwf = 40.0 + ((power - 75000) / 15000.0) * 55.0
             expert_pwf = min(expert_pwf, 98.0)
         elif power < 40000:
             expert_pwf = 40.0 + ((40000 - power) / 10000.0) * 55.0
             expert_pwf = min(expert_pwf, 98.0)
 
-        # C. Overstrain Degradation (OSF)
         strain = torque * tool_wear
         strain_limit = 11000 if motor_options[motor_type] == 0 else (12000 if motor_options[motor_type] == 1 else 13000)
-        warning_limit = strain_limit * 0.8 # Warn at 80% of limit
+        warning_limit = strain_limit * 0.8
         if strain > warning_limit:
             expert_osf = 40.0 + ((strain - warning_limit) / (strain_limit - warning_limit)) * 55.0
             expert_osf = min(expert_osf, 98.0)
 
-        # D. Heat Dissipation Degradation (HDF)
         temp_diff = process_temp - air_temp
         if temp_diff <= 10.0 and rpm < 1500:
-            expert_hdf = 40.0 + ((10.0 - temp_diff) / 2.0) * 55.0 # Scales as diff approaches 8.0
+            expert_hdf = 40.0 + ((10.0 - temp_diff) / 2.0) * 55.0
             expert_hdf = min(expert_hdf, 98.0)
 
-        # Merge AI with Expert System (Take the highest risk detected by either system)
-        p_twf_raw = max(p_twf_raw, expert_twf)
-        p_pwf_raw = max(p_pwf_raw, expert_pwf)
-        p_osf_raw = max(p_osf_raw, expert_osf)
-        p_hdf_raw = max(p_hdf_raw, expert_hdf)
+        # Merge AI with Expert System
+        p_hdf = max(p_hdf_raw, expert_hdf)
+        p_osf = max(p_osf_raw, expert_osf)
+        p_pwf = max(p_pwf_raw, expert_pwf)
+        p_twf = max(p_twf_raw, expert_twf)
+
+        # =========================================
+        # 3. CUMULATIVE PROBABILITY (Reliability Engineering)
+        # =========================================
+        p_fail_hdf = p_hdf / 100.0
+        p_fail_osf = p_osf / 100.0
+        p_fail_pwf = p_pwf / 100.0
+        p_fail_twf = p_twf / 100.0
         
-        expert_max_risk = max(expert_twf, expert_pwf, expert_osf, expert_hdf)
-        raw_overall_risk = max(raw_overall_risk, expert_max_risk)
+        p_survive_total = (1.0 - p_fail_hdf) * (1.0 - p_fail_osf) * (1.0 - p_fail_pwf) * (1.0 - p_fail_twf)
+        calc_overall_risk = (1.0 - p_survive_total) * 100.0
+        
+        overall_risk_pct = max(raw_overall_risk, calc_overall_risk)
+        overall_risk_pct = min(100.0, overall_risk_pct)
 
-        # 3. SMART NORMALIZATION
-        if raw_overall_risk >= 80.0:
-            overall_risk_pct = min(100.0, raw_overall_risk * 1.1) # Push closer to 100 naturally
-        else:
-            overall_risk_pct = raw_overall_risk
+        ai_confidence = p_normal if overall_risk_pct < 50 else max(p_hdf, p_osf, p_pwf, p_twf)
 
-        max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
-        if max_fault > 0:
-            scale_factor = overall_risk_pct / max_fault
-            p_hdf = min(100.0, p_hdf_raw * scale_factor)
-            p_osf = min(100.0, p_osf_raw * scale_factor)
-            p_pwf = min(100.0, p_pwf_raw * scale_factor)
-            p_twf = min(100.0, p_twf_raw * scale_factor)
-        else:
-            p_hdf = p_osf = p_pwf = p_twf = 0.0
-
-        ai_confidence = max(p_normal, max_fault) if raw_overall_risk < 80 else 99.9
+    # Determine Highest Fault for FMEA
+    fault_dict = {'Heat (HDF)': p_hdf, 'Overstrain (OSF)': p_osf, 'Power (PWF)': p_pwf, 'Wear (TWF)': p_twf}
+    highest_fault_name = max(fault_dict, key=fault_dict.get)
 
     # --- TOP ROW: System Status & Overall Risk ---
     if overall_risk_pct < 40.0:
@@ -298,17 +299,28 @@ if analyze_btn and scaler and model:
         status_bg = "#E8F5E9"
         status_title = "✅ SYSTEM NORMAL"
         sys_status = "Safe"
+        action_req = "Continue Monitoring"
+        diag_display = "NORMAL"
     elif overall_risk_pct < 75.0:
         status_color = "#F39C12" 
         status_bg = "#FEF9E7"
         status_title = f"⚠️ ELEVATED RISK"
         sys_status = "Warning"
+        diag_display = highest_fault_name
+        if "Heat" in highest_fault_name: action_req = "Check Cooling & Ventilation"
+        elif "Overstrain" in highest_fault_name: action_req = "Reduce Torque Load"
+        elif "Power" in highest_fault_name: action_req = "Inspect Power/Speed Setup"
+        else: action_req = "Inspect Tool Condition"
     else:
         status_color = "#DD4B39" 
         status_bg = "#FDEDEC"
-        display_label = diag_label if diag_label.upper() != 'NORMAL' else 'FAILURE PREDICTED'
-        status_title = f"🚨 DANGER: {display_label}"
+        status_title = f"🚨 DANGER: {highest_fault_name}"
         sys_status = "Danger"
+        diag_display = highest_fault_name
+        if "Heat" in highest_fault_name: action_req = "Immediate Shutdown - Overheating"
+        elif "Overstrain" in highest_fault_name: action_req = "Immediate Shutdown - Load Exceeded"
+        elif "Power" in highest_fault_name: action_req = "Immediate Shutdown - Power Spike"
+        else: action_req = "Immediate Shutdown - Replace Tool"
         
     st.markdown(f"""
     <div style="background-color:{status_bg}; border: 2px solid {status_color}; padding: 15px; border-radius: 10px; text-align: center; margin-bottom:20px;">
@@ -329,15 +341,10 @@ if analyze_btn and scaler and model:
         </div>
         """, unsafe_allow_html=True)
         
-        highest_fault_name = "None"
-        if overall_risk_pct >= 40:
-            fault_dict = {'Heat (HDF)': p_hdf, 'Overstrain (OSF)': p_osf, 'Power (PWF)': p_pwf, 'Wear (TWF)': p_twf}
-            highest_fault_name = max(fault_dict, key=fault_dict.get)
-            
         st.markdown(f"""
         <div class="metric-card" style="border-left-color: {status_color};">
             <h4 style="color:#666; margin-bottom:5px;">Primary FMEA Concern</h4>
-            <h2 style="color:{status_color}; margin:0;">{highest_fault_name}</h2>
+            <h2 style="color:{status_color}; margin:0;">{diag_display}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -363,12 +370,13 @@ if analyze_btn and scaler and model:
 
     motor_short_name = str(motor_type).split(' ')
 
+    # Log entry preparation
     new_log_raw = pd.DataFrame([{
         'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'Motor Type': motor_short_name,
-        'Speed (RPM)': rpm,
         'Risk Level': f"{overall_risk_pct:.1f}%",
-        'FMEA Diagnosis': diag_label if overall_risk_pct > 40 else "NORMAL",
+        'FMEA Diagnosis': diag_display,
+        'Recommended Action': action_req,
         'Status': sys_status
     }])
     st.session_state.inspection_log = pd.concat([new_log_raw, st.session_state.inspection_log], ignore_index=True)
@@ -377,9 +385,10 @@ if analyze_btn and scaler and model:
 # 5. INSPECTION HISTORY (FMEA Log)
 # =========================================
 st.markdown("---")
-st.markdown("### 📋 FMEA Event Log")
+st.markdown("### 📋 Automated FMEA Event Log")
 if not st.session_state.inspection_log.empty:
-    st.dataframe(st.session_state.inspection_log, use_container_width=True, hide_index=True)
+    styled_df = st.session_state.inspection_log.style.apply(highlight_fmea_rows, axis=1)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
 else:
     st.info("No active events logged in the current session. Run a diagnostic to populate the FMEA table.")
 
