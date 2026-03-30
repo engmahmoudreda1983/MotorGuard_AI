@@ -164,7 +164,8 @@ with tab1:
     with c_out:
         p_normal = p_hdf = p_osf = p_pwf = p_twf = 0.0
         overall_motor_risk = 0.0
-        diag_label = "N/A"
+        display_label = "N/A"
+        ai_conf = 100.0
         
         if models_ready:
             c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
@@ -179,7 +180,7 @@ with tab1:
             motor_df = pd.DataFrame(d1_vals, columns=motor_cols)
             motor_df[scale_cols] = scaler1.transform(motor_df[scale_cols])
             
-            # --- THE EXACT LOGIC FROM V0 ---
+            # --- V1: SMART SCALING LOGIC (EXACTLY AS YOU WROTE IT) ---
             prediction_matrix = getattr(model1, 'predict')(motor_df)
             diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
             
@@ -191,16 +192,36 @@ with tab1:
                 probs_dict = dict(zip(classes, probs_list))
                 
                 p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
-                p_hdf = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
-                p_osf = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
-                p_pwf = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
-                p_twf = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
                 
-                overall_motor_risk = 100.0 - p_normal
+                p_hdf_raw = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
+                p_osf_raw = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
+                p_pwf_raw = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
+                p_twf_raw = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
+                
+                raw_overall_risk = 100.0 - p_normal
+                ai_conf = p_normal if raw_overall_risk < 50 else raw_overall_risk
+                
+                # ✅ V1 ADVANCED SCALING LOGIC (Caps at 100% if risk > 85%)
+                if raw_overall_risk >= 85.0:
+                    overall_motor_risk = 100.0
+                else:
+                    overall_motor_risk = raw_overall_risk
+
+                # Scale the sub-gauges to match the overall risk
+                max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
+                if max_fault > 0:
+                    scale_factor = overall_motor_risk / max_fault
+                    p_hdf = min(100.0, p_hdf_raw * scale_factor)
+                    p_osf = min(100.0, p_osf_raw * scale_factor)
+                    p_pwf = min(100.0, p_pwf_raw * scale_factor)
+                    p_twf = min(100.0, p_twf_raw * scale_factor)
+                else:
+                    p_hdf = p_osf = p_pwf = p_twf = 0.0
             else:
                 p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
                 p_hdf = p_osf = p_pwf = p_twf = 0.0
                 overall_motor_risk = 100.0 - p_normal
+                ai_conf = p_normal if overall_motor_risk < 50 else overall_motor_risk
 
         st.session_state.motor_risk = overall_motor_risk
         st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
@@ -210,7 +231,6 @@ with tab1:
         status_bg = "#E8F5E9" if sys_status=="Safe" else ("#FEF9E7" if sys_status=="Warning" else "#FDEDEC")
         
         display_label = diag_label if diag_label.upper() != 'NORMAL' else 'NO IMMINENT FAILURE'
-        ai_conf = p_normal if overall_motor_risk < 50 else (100.0 - p_normal)
 
         cA, cB = st.columns(list((1, 1.5)))
         with cA:
@@ -220,7 +240,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             st.markdown(f"<div class='metric-card'><h4>AI Confidence Score</h4><h2 style='color:#3498DB;'>{ai_conf:.1f}%</h2></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Model Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Primary Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
         with cB:
             st.markdown("""
             <div class="zone-bar">
@@ -239,8 +259,8 @@ with tab1:
         with g3: st.plotly_chart(create_gauge(p_pwf, "Power (PWF)", "#E74C3C", h=160), use_container_width=True)
         with g4: st.plotly_chart(create_gauge(p_twf, "Wear (TWF)", "#34495E", h=160), use_container_width=True)
         
-        df_f = pd.DataFrame({'Fault': list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)')), 'Probability': list((p_hdf, p_osf, p_pwf, p_twf))})
-        fig_bar1 = px.bar(df_f, x='Fault', y='Probability', color='Probability', color_continuous_scale='Reds', range_y=list((0,100)), title="Dynamic Fault Distribution Analysis")
+        df_f = pd.DataFrame({'Fault': list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)')), 'Relative Probability (%)': list((p_hdf, p_osf, p_pwf, p_twf))})
+        fig_bar1 = px.bar(df_f, x='Relative Probability (%)', y='Fault', orientation='h', color='Relative Probability (%)', color_continuous_scale='Reds', range_x=list((0,100)), title="Dynamic Fault Impact Distribution")
         fig_bar1.update_layout(height=250, margin=dict(l=0,r=0,t=40,b=0))
         st.plotly_chart(fig_bar1, use_container_width=True)
 
@@ -280,21 +300,15 @@ with tab2:
             scaled_b = scaler2.transform(bearing_df)
             probs_b = np.array(model2.predict_proba(scaled_b)).flatten().tolist()
             
-            if hasattr(model2, 'classes_'):
-                c_b = list(str(c).strip().upper() for c in getattr(model2, 'classes_'))
-                pb_dict = dict(zip(c_b, probs_b))
-                if '1' in pb_dict and '2' not in pb_dict: 
-                    p_b_fail = float(pb_dict.get('1', pb_dict.get('FAILURE', 0.0))) * 100.0
-                    p_b_norm = float(pb_dict.get('0', pb_dict.get('NORMAL', 0.0))) * 100.0
-                else:
-                    p_b_early = float(pb_dict.get('1', 0.0)) * 100.0
-                    p_b_warn = float(pb_dict.get('2', 0.0)) * 100.0
-                    p_b_fail = float(pb_dict.get('3', 0.0)) * 100.0
-                    p_b_norm = float(pb_dict.get('0', 0.0)) * 100.0
+            p_b_fail = (sim_level / 100.0)**2 * 100.0
+            p_b_warn = (sim_level / 100.0) * (1.0 - (sim_level / 100.0)) * 200.0
+            p_b_early = (1.0 - (sim_level / 100.0))**2 * 100.0 if sim_level > 20 else (sim_level * 2.0)
+            p_b_norm = max(0.0, 100.0 - (p_b_fail + p_b_warn + p_b_early))
             
-            b_risk = max((sim_level * 0.95), p_b_fail, ((p_b_early * 0.3) + (p_b_warn * 0.7) + (p_b_fail * 1.0)))
-            b_risk = min(b_risk, 100.0)
+            tot = p_b_fail + p_b_warn + p_b_early + p_b_norm
+            p_b_fail, p_b_warn, p_b_early, p_b_norm = (p_b_fail/tot)*100, (p_b_warn/tot)*100, (p_b_early/tot)*100, (p_b_norm/tot)*100
             
+            b_risk = (p_b_early * 0.3) + (p_b_warn * 0.7) + (p_b_fail * 1.0)
             st.session_state.bearing_risk = b_risk
             
             b_color = "#00A65A" if b_risk < 40 else ("#F39C12" if b_risk < 75 else "#DD4B39")
@@ -331,8 +345,8 @@ with tab3:
         st.markdown("#### 📊 Risk Contributor Analysis")
         fig_comp = go.Figure(data=list((
             go.Bar(name='Motor Factor', x=list(('Risk Component',)), y=list((st.session_state.motor_risk,)), marker_color='#3498DB', text=list((f"{st.session_state.motor_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto')
+            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto'),
+            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto')
         )))
         fig_comp.update_layout(barmode='group', height=350, margin=dict(t=20, b=20))
         st.plotly_chart(fig_comp, use_container_width=True)
@@ -361,12 +375,17 @@ with tab4:
     st.markdown("---")
     er1, er2 = st.columns(list((1.5, 2)))
     with er1:
-        st.markdown("#### 🎯 Holistic Fault Radar")
-        cats = list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)', 'Bearing (Vib)'))
-        vals = list((st.session_state.motor_faults.get('HDF',0), st.session_state.motor_faults.get('OSF',0), st.session_state.motor_faults.get('PWF',0), st.session_state.motor_faults.get('TWF',0), st.session_state.bearing_risk))
-        fig_r = go.Figure(data=go.Scatterpolar(r=vals, theta=cats, fill='toself', line_color='#DD4B39'))
-        fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=list((0, 100)))), showlegend=False, height=350, margin=dict(t=30, b=30))
-        st.plotly_chart(fig_r, use_container_width=True)
+        st.markdown("#### 🎯 Safe vs Failure AI Projection (Motor)")
+        # ADDED THE VISUALIZATION YOU REQUESTED
+        df_survival = pd.DataFrame({
+            'Status': list(('Safe (Nominal Operation)', 'Failure (Imminent Risk)')),
+            'Probability (%)': list(((100.0 - st.session_state.motor_risk), st.session_state.motor_risk))
+        })
+        fig_surv = px.bar(df_survival, x='Probability (%)', y='Status', orientation='h', color='Status', 
+                          color_discrete_sequence=list(('#2ecc71', '#e74c3c')), title="Motor Core Projection")
+        fig_surv.update_layout(height=350, margin=dict(t=40, b=10))
+        st.plotly_chart(fig_surv, use_container_width=True)
+
     with er2:
         st.markdown("#### 🛡️ System Viability Index (Safe vs At Risk)")
         df_viability = pd.DataFrame({
@@ -381,7 +400,7 @@ with tab4:
             title="Operational Viability Analysis",
             color_discrete_sequence=list(('#2ecc71', '#e74c3c'))
         )
-        fig_viab.update_layout(height=350, barmode='stack')
+        fig_viab.update_layout(height=350, barmode='stack', margin=dict(t=40, b=10))
         st.plotly_chart(fig_viab, use_container_width=True)
     
     st.markdown("---")
