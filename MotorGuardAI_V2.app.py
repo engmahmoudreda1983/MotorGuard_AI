@@ -136,7 +136,7 @@ if not models_loaded:
 # 5. TABS SETUP
 # =========================================
 tab1, tab2, tab3, tab4 = st.tabs((
-    "⚙️ Model 1: CNC Motor Diagnostics", 
+    "⚙️ Model 1: Motor Diagnostics", 
     "📳 Model 2: Vibration Analysis (NASA)", 
     "🔗 System Fusion & FMEA", 
     "📊 Executive Command Center"
@@ -149,10 +149,10 @@ if 'bearing_risk' not in st.session_state: st.session_state.bearing_risk = 0.0
 if 'bearing_status' not in st.session_state: st.session_state.bearing_status = "Normal"
 
 # =========================================
-# TAB 1: CNC MOTOR (MODEL 1)
+# TAB 1: MOTOR (MODEL 1)
 # =========================================
 with tab1:
-    st.markdown("### ⚙️ Thermomechanical AI Engine (AI4I Dataset)")
+    st.markdown("### ⚙️ Thermomechanical AI Engine")
     
     col_in, col_out = st.columns((1, 2))
     
@@ -174,21 +174,18 @@ with tab1:
         processed_df1[cols_to_scale] = scaler1.transform(raw_df1[cols_to_scale])
         
         # Robust Probability Extraction for Model 1
-        probs1_raw = getattr(model1, 'predict_proba')(processed_df1)
-        if isinstance(probs1_raw, list):
-            probs1 = [float(np.array(arr).flatten()[-1]) for arr in probs1_raw]
-        else:
-            probs1 = [float(x) for x in np.array(probs1_raw).flatten().tolist()]
+        probs1_raw = model1.predict_proba(processed_df1)
+        probs1 = np.array(probs1_raw).flatten().tolist()
 
-        if hasattr(model1, 'classes_') and not isinstance(probs1_raw, list):
+        if hasattr(model1, 'classes_'):
             p_dict = dict(zip([str(c).upper() for c in model1.classes_], probs1))
-            p_norm = p_dict.get('NORMAL', 0)*100
-            p_hdf = p_dict.get('HEAT DISSIPATION FAILURE (HDF)', p_dict.get('HDF',0))*100
-            p_osf = p_dict.get('OVERSTRAIN FAILURE (OSF)', p_dict.get('OSF',0))*100
-            p_pwf = p_dict.get('POWER FAILURE (PWF)', p_dict.get('PWF',0))*100
-            p_twf = p_dict.get('TOOL WEAR FAILURE (TWF)', p_dict.get('TWF',0))*100
+            p_norm = float(p_dict.get('NORMAL', 0))*100.0
+            p_hdf = float(p_dict.get('HEAT DISSIPATION FAILURE (HDF)', p_dict.get('HDF',0)))*100.0
+            p_osf = float(p_dict.get('OVERSTRAIN FAILURE (OSF)', p_dict.get('OSF',0)))*100.0
+            p_pwf = float(p_dict.get('POWER FAILURE (PWF)', p_dict.get('PWF',0)))*100.0
+            p_twf = float(p_dict.get('TOOL WEAR FAILURE (TWF)', p_dict.get('TWF',0)))*100.0
         else:
-            p_norm = probs1*100 if len(probs1)>0 else 100.0
+            p_norm = float(probs1)*100.0 if len(probs1)>0 else 100.0
             p_hdf = p_osf = p_pwf = p_twf = 0.0
             
         p_fail_hdf = p_hdf/100.0; p_fail_osf = p_osf/100.0; p_fail_pwf = p_pwf/100.0; p_fail_twf = p_twf/100.0
@@ -233,20 +230,14 @@ with tab2:
         raw_df2 = pd.DataFrame({'RMS':[rms_val], 'Kurtosis':[kurt_val], 'Skewness':[skew_val], 'Peak_to_Peak':[p2p_val], 'Crest_Factor':[crest_val]})
         processed_df2 = scaler2.transform(raw_df2)
         
-        # Robust Probability Extraction for Model 2 (Fixes the ValueError)
-        probs2_raw = getattr(model2, 'predict_proba')(processed_df2)
-        probs_list2 = []
-        if isinstance(probs2_raw, list):
-            for arr in probs2_raw:
-                flat_arr = np.array(arr).flatten()
-                probs_list2.append(float(flat_arr if len(flat_arr) > 1 else flat_arr))
-        else:
-            probs_list2 = [float(x) for x in np.array(probs2_raw).flatten().tolist()]
+        # Super Robust Probability Extraction for Model 2
+        probs2_raw = model2.predict_proba(processed_df2)
+        probs_list2 = np.array(probs2_raw).flatten().tolist()
             
-        p_b_norm = probs_list2*100.0 if len(probs_list2)>0 else 100.0
-        p_b_early = probs_list2*100.0 if len(probs_list2)>1 else 0.0
-        p_b_warn = probs_list2*100.0 if len(probs_list2)>2 else 0.0
-        p_b_fail = probs_list2*100.0 if len(probs_list2)>3 else 0.0
+        p_b_norm = float(probs_list2)*100.0 if len(probs_list2)>0 else 100.0
+        p_b_early = float(probs_list2)*100.0 if len(probs_list2)>1 else 0.0
+        p_b_warn = float(probs_list2)*100.0 if len(probs_list2)>2 else 0.0
+        p_b_fail = float(probs_list2)*100.0 if len(probs_list2)>3 else 0.0
         
         bearing_overall_risk = float((p_b_early*0.4) + (p_b_warn*0.8) + (p_b_fail*1.0))
         
@@ -298,8 +289,9 @@ with tab4:
     health_score = float(100.0 - integrated_risk_pct)
     health_color = "#00A65A" if health_score > 60 else ("#F39C12" if health_score > 25 else "#DD4B39")
     
-    base_asset_value = 150000.0 
-    value_at_risk = float(base_asset_value * integrated_risk_frac)
+    # Replace Financial Value with Operational Impact
+    downtime_prob = integrated_risk_frac * 100.0
+    downtime_color = "#DD4B39" if downtime_prob > 50 else ("#F39C12" if downtime_prob > 20 else "#00A65A")
     
     ex1, ex2, ex3 = st.columns(3)
     with ex1:
@@ -312,10 +304,10 @@ with tab4:
         """, unsafe_allow_html=True)
     with ex2:
          st.markdown(f"""
-        <div class="metric-card" style="border-top-color: #E74C3C;">
-            <h4 style="color:#666;">Financial Value at Risk</h4>
-            <h1 style="color:#E74C3C; font-size:40px; margin:0;">${value_at_risk:,.0f}</h1>
-            <p style="color:#888;">Potential Capex Loss</p>
+        <div class="metric-card" style="border-top-color: {downtime_color};">
+            <h4 style="color:#666;">Downtime Probability</h4>
+            <h1 style="color:{downtime_color}; font-size:40px; margin:0;">{downtime_prob:.1f}%</h1>
+            <p style="color:#888;">Risk of Unplanned Outage</p>
         </div>
         """, unsafe_allow_html=True)
     with ex3:
