@@ -134,9 +134,13 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("#### 💾 Log Control")
-    # Added a global log button in sidebar so user can manually save the current state anytime
-    if st.button("📝 Log Current State", use_container_width=True):
-        st.success("State Logged to FMEA Table")
+    if st.button("📝 Append Readings to Log", use_container_width=True, type="primary"):
+        if hasattr(st.session_state, 'current_motor_log') and hasattr(st.session_state, 'current_bearing_log'):
+            new_logs = pd.DataFrame(list((st.session_state.current_motor_log, st.session_state.current_bearing_log)))
+            st.session_state.inspection_log = pd.concat(list((new_logs, st.session_state.inspection_log)), ignore_index=True)
+            st.success("✅ Data Appended Successfully!")
+        else:
+            st.warning("⚠️ Ensure you interact with both tabs before logging.")
 
 st.markdown("""
 <div class="main-header">
@@ -152,52 +156,59 @@ st.markdown("""
 
 tab1, tab2, tab3, tab4 = st.tabs(list(("⚙️ Motor Diagnostics", "📳 Bearing Vibration", "🔗 Reliability Fusion", "📊 Executive Summary")))
 
-# --- TAB 1: MOTOR DIAGNOSTICS ---
+# ==============================================================================
+# TAB 1: MOTOR DIAGNOSTICS (EXACTLY YOUR V1 LOGIC + LIVE AUTO-UPDATE)
+# ==============================================================================
 with tab1:
     c_in, c_out = st.columns(list((1, 2.5)))
     with c_in:
-        st.markdown("#### 🎛️ Live Telemetry")
-        motor_options = {'L (Low - Standard)': 0, 'M (Medium - Commercial)': 1, 'H (High - Industrial)': 2}
-        motor_type = st.selectbox("Motor Quality Grade ❓", list(motor_options.keys()), index=1)
-        air_temp = st.number_input("Ambient Air Temp [K] ❓", 290.0, 310.0, 298.0, 0.1)
-        process_temp = st.number_input("Motor Core Temp [K] ❓", 300.0, 320.0, 308.0, 0.1)
-        rpm = st.slider("Rotational Speed [RPM] ❓", 0, 3000, 1500, 10)
-        torque = st.slider("Applied Torque [Nm] ❓", 0.0, 100.0, 40.0, 0.5)
-        tool_wear = st.slider("Tool Wear [min] ❓", 0, 300, 50, 1)
-
-    with c_out:
-        p_normal = p_hdf = p_osf = p_pwf = p_twf = 0.0
-        overall_motor_risk = 0.0
-        display_label = "N/A"
-        ai_conf = 100.0
+        st.markdown("#### 🎛️ Live Sensor Telemetry")
+        motor_options = {
+            'L (Low - Standard Build)': 0,
+            'M (Medium - Commercial)': 1,
+            'H (High - Industrial Grade)': 2
+        }
+        motor_type = st.selectbox(
+            "Motor Quality Grade ❓", 
+            list(motor_options.keys()), 
+            index=1,
+            help="L: Low quality (More prone to failure and lower limits). M: Medium quality. H: High quality (Durable industrial grade with high tolerance)."
+        )
         
+        st.markdown("---")
+        st.markdown("#### 🌡️ Thermal Metrics")
+        air_temp = st.number_input("Ambient Air Temp [K] ❓", min_value=290.0, max_value=310.0, value=298.0, step=0.1, help="Temperature of the surrounding environment in Kelvin. Range: 290K - 310K.")
+        process_temp = st.number_input("Motor Core Temp [K] ❓", min_value=300.0, max_value=320.0, value=308.0, step=0.1, help="Operating temperature of the motor core. Range: 300K - 320K. (Needs to be sufficiently higher than Ambient Temp for heat dissipation).")
+        
+        st.markdown("---")
+        st.markdown("#### ⚙️ Mechanical Metrics")
+        rpm = st.slider("Rotational Speed [RPM] ❓", min_value=1100, max_value=2900, value=1500, step=10, help="Motor shaft speed. Extreme high speeds combined with torque increase Power Failure (PWF) risk.")
+        torque = st.slider("Applied Torque [Nm] ❓", min_value=10.0, max_value=80.0, value=40.0, step=0.5, help="Twisting force applied by the motor. High torque combined with tool wear increases Overstrain Failure (OSF) risk.")
+        tool_wear = st.slider("Tool Wear Level [min] ❓", min_value=0, max_value=260, value=50, step=1, help="Usage duration of the attached tool. Exceeding 200 mins drastically increases Tool Wear Failure (TWF) risk.")
+        
+    with c_out:
         if models_ready:
-            type_dict = {'L (Low - Standard)': 0, 'M (Medium - Commercial)': 1, 'H (High - Industrial)': 2}
-            
             c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
             c_proc = 'Process temperature ' + chr(91) + 'K' + chr(93)
             c_rpm = 'Rotational speed ' + chr(91) + 'rpm' + chr(93)
             c_trq = 'Torque ' + chr(91) + 'Nm' + chr(93)
             c_wear = 'Tool wear ' + chr(91) + 'min' + chr(93)
             
-            raw_data = {
-                'Type': list((type_dict.get(motor_type, 1),)),
+            raw_df = pd.DataFrame({
+                'Type': list((motor_options[motor_type],)),
                 c_air: list((air_temp,)),
                 c_proc: list((process_temp,)),
                 c_rpm: list((rpm,)),
                 c_trq: list((torque,)),
                 c_wear: list((tool_wear,))
-            }
+            })
             
-            motor_df = pd.DataFrame(raw_data)
-            scale_cols = list((c_air, c_proc, c_rpm, c_trq, c_wear))
-            motor_df[scale_cols] = scaler1.transform(motor_df[scale_cols])
+            cols_to_scale = list((c_air, c_proc, c_rpm, c_trq, c_wear))
+            processed_df = raw_df.copy()
+            processed_df[cols_to_scale] = scaler1.transform(raw_df[cols_to_scale])
             
-            # --- THE EXACT V1 MODEL EXTRACTION LOGIC ---
-            prediction_matrix = getattr(model1, 'predict')(motor_df)
-            diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
-            
-            probs_matrix = getattr(model1, 'predict_proba')(motor_df)
+            # --- 1. AI PREDICTION ---
+            probs_matrix = getattr(model1, 'predict_proba')(processed_df)
             probs_list = np.array(probs_matrix).flatten().tolist()
             
             if hasattr(model1, 'classes_'):
@@ -205,86 +216,160 @@ with tab1:
                 probs_dict = dict(zip(classes, probs_list))
                 
                 p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
+                
                 p_hdf_raw = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
                 p_osf_raw = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
                 p_pwf_raw = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
                 p_twf_raw = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
                 
-                # 🛑 IDLE BYPASS: Prevents ML Anomaly when Speed is 0 🛑
-                if rpm < 500 and torque < 15.0:
-                    p_normal = 100.0
-                    p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
-                    diag_label = 'NORMAL'
-                
                 raw_overall_risk = 100.0 - p_normal
-                
-                # ✅ V1 SMART SCALING LOGIC
-                if raw_overall_risk >= 85.0:
-                    overall_motor_risk = 100.0
-                else:
-                    overall_motor_risk = raw_overall_risk
-
-                max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
-                if max_fault > 0:
-                    scale_factor = overall_motor_risk / max_fault
-                    p_hdf = min(100.0, p_hdf_raw * scale_factor)
-                    p_osf = min(100.0, p_osf_raw * scale_factor)
-                    p_pwf = min(100.0, p_pwf_raw * scale_factor)
-                    p_twf = min(100.0, p_twf_raw * scale_factor)
-                else:
-                    p_hdf = p_osf = p_pwf = p_twf = 0.0
             else:
                 p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
-                p_hdf = p_osf = p_pwf = p_twf = 0.0
-                overall_motor_risk = 100.0 - p_normal
+                raw_overall_risk = 100.0 - p_normal
+                p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
 
-        st.session_state.motor_risk = overall_motor_risk
-        st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
+            # --- 2. EXPERT SYSTEM OVERRIDES ---
+            expert_twf = 0.0
+            expert_pwf = 0.0
+            expert_osf = 0.0
+            expert_hdf = 0.0
 
-        sys_status = "Safe" if overall_motor_risk < 40 else ("Warning" if overall_motor_risk < 75 else "Danger")
-        status_color = "#00A65A" if sys_status=="Safe" else ("#F39C12" if sys_status=="Warning" else "#DD4B39")
-        status_bg = "#E8F5E9" if sys_status=="Safe" else ("#FEF9E7" if sys_status=="Warning" else "#FDEDEC")
-        
-        display_label = diag_label if diag_label.upper() != 'NORMAL' else 'NO IMMINENT FAILURE'
-        ai_conf = p_normal if overall_motor_risk < 50 else overall_motor_risk
+            if tool_wear >= 200:
+                expert_twf = 50.0 + ((tool_wear - 200) / 40.0) * 45.0
+                expert_twf = min(expert_twf, 98.0)
+            
+            power = torque * rpm
+            if power > 75000:
+                expert_pwf = 40.0 + ((power - 75000) / 15000.0) * 55.0
+                expert_pwf = min(expert_pwf, 98.0)
+            elif power < 40000:
+                expert_pwf = 40.0 + ((40000 - power) / 10000.0) * 55.0
+                expert_pwf = min(expert_pwf, 98.0)
 
-        cA, cB = st.columns(list((1, 1.5)))
-        with cA:
+            strain = torque * tool_wear
+            strain_limit = 11000 if motor_options[motor_type] == 0 else (12000 if motor_options[motor_type] == 1 else 13000)
+            warning_limit = strain_limit * 0.8
+            if strain > warning_limit:
+                expert_osf = 40.0 + ((strain - warning_limit) / (strain_limit - warning_limit)) * 55.0
+                expert_osf = min(expert_osf, 98.0)
+
+            temp_diff = process_temp - air_temp
+            if temp_diff <= 10.0 and rpm < 1500:
+                expert_hdf = 40.0 + ((10.0 - temp_diff) / 2.0) * 55.0
+                expert_hdf = min(expert_hdf, 98.0)
+
+            # Merge AI with Expert System
+            p_hdf = max(p_hdf_raw, expert_hdf)
+            p_osf = max(p_osf_raw, expert_osf)
+            p_pwf = max(p_pwf_raw, expert_pwf)
+            p_twf = max(p_twf_raw, expert_twf)
+
+            # --- 3. CUMULATIVE PROBABILITY ---
+            p_fail_hdf = p_hdf / 100.0
+            p_fail_osf = p_osf / 100.0
+            p_fail_pwf = p_pwf / 100.0
+            p_fail_twf = p_twf / 100.0
+            
+            p_survive_total = (1.0 - p_fail_hdf) * (1.0 - p_fail_osf) * (1.0 - p_fail_pwf) * (1.0 - p_fail_twf)
+            calc_overall_risk = (1.0 - p_survive_total) * 100.0
+            
+            overall_risk_pct = max(raw_overall_risk, calc_overall_risk)
+            overall_risk_pct = min(100.0, overall_risk_pct)
+
+            ai_confidence = p_normal if overall_risk_pct < 50 else max(list((p_hdf, p_osf, p_pwf, p_twf)))
+
+            # Determine Highest Fault for FMEA
+            fault_dict = {'Heat (HDF)': p_hdf, 'Overstrain (OSF)': p_osf, 'Power (PWF)': p_pwf, 'Wear (TWF)': p_twf}
+            highest_fault_name = max(fault_dict, key=fault_dict.get)
+
+            # Update Session States for Tabs 3 and 4
+            st.session_state.motor_risk = overall_risk_pct
+            st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
+
+            # --- TOP ROW: System Status ---
+            if overall_risk_pct < 40.0:
+                status_color = "#00A65A" 
+                status_bg = "#E8F5E9"
+                status_title = "✅ SYSTEM NORMAL"
+                sys_status = "Safe"
+                diag_display = "NORMAL"
+            elif overall_risk_pct < 75.0:
+                status_color = "#F39C12" 
+                status_bg = "#FEF9E7"
+                status_title = f"⚠️ ELEVATED RISK"
+                sys_status = "Warning"
+                diag_display = highest_fault_name
+            else:
+                status_color = "#DD4B39" 
+                status_bg = "#FDEDEC"
+                status_title = f"🚨 DANGER: {highest_fault_name}"
+                sys_status = "Danger"
+                diag_display = highest_fault_name
+                
             st.markdown(f"""
-            <div style="background-color:{status_bg}; border: 2px solid {status_color}; padding: 15px; border-radius: 8px; text-align: center; margin-bottom:15px;">
-                <h3 style="color:{status_color}; margin:0;">{'✅ SYSTEM NORMAL' if sys_status=='Safe' else ('⚠️ WARNING STATE' if sys_status=='Warning' else '🚨 DANGER STATE')}</h3>
+            <div style="background-color:{status_bg}; border: 2px solid {status_color}; padding: 15px; border-radius: 10px; text-align: center; margin-bottom:20px;">
+                <h2 style="color:{status_color}; margin:0;">{status_title}</h2>
+                <p style="color:#555; font-size:16px; margin:0;">Live Assessment based on AI & Expert Overrides</p>
             </div>
             """, unsafe_allow_html=True)
-            st.markdown(f"<div class='metric-card'><h4>AI Confidence Score</h4><h2 style='color:#3498DB;'>{ai_conf:.1f}%</h2></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Primary Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
-        with cB:
-            st.markdown("""
-            <div class="zone-bar">
-                <div class="zone-safe">SAFE (0-40)</div>
-                <div class="zone-warn">WARN (40-75)</div>
-                <div class="zone-dang">DANGER (75-100)</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.plotly_chart(create_gauge(overall_motor_risk, "MASTER OVERALL RISK", status_color, h=280), use_container_width=True)
+                
+            # --- MIDDLE ROW: Key Metrics & Master Gauge ---
+            colA, colB = st.columns(list((1, 1.5)))
+            
+            with colA:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h4 style="color:#666; margin-bottom:5px;">AI Confidence Score</h4>
+                    <h2 style="color:#3498DB; margin:0;">{ai_confidence:.1f}%</h2>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown(f"""
+                <div class="metric-card" style="border-left-color: {status_color};">
+                    <h4 style="color:#666; margin-bottom:5px;">Primary FMEA Concern</h4>
+                    <h2 style="color:{status_color}; margin:0;">{diag_display}</h2>
+                </div>
+                """, unsafe_allow_html=True)
 
-        st.markdown("---")
-        st.markdown("#### 📊 Specific FMEA Fault Probabilities")
-        g1, g2, g3, g4 = st.columns(4)
-        with g1: st.plotly_chart(create_gauge(p_hdf, "Heat (HDF)", "#E67E22", h=160), use_container_width=True)
-        with g2: st.plotly_chart(create_gauge(p_osf, "Strain (OSF)", "#9B59B6", h=160), use_container_width=True)
-        with g3: st.plotly_chart(create_gauge(p_pwf, "Power (PWF)", "#E74C3C", h=160), use_container_width=True)
-        with g4: st.plotly_chart(create_gauge(p_twf, "Wear (TWF)", "#34495E", h=160), use_container_width=True)
-        
-        df_f = pd.DataFrame({'Fault': list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)')), 'Relative Risk (%)': list((p_hdf, p_osf, p_pwf, p_twf))})
-        fig_bar1 = px.bar(df_f, x='Relative Risk (%)', y='Fault', orientation='h', color='Relative Risk (%)', color_continuous_scale='RdYlGn_r', range_x=list((0,100)), title="Dynamic Fault Impact Distribution")
-        fig_bar1.update_layout(height=250, margin=dict(l=0,r=0,t=40,b=0))
-        st.plotly_chart(fig_bar1, use_container_width=True)
+            with colB:
+                st.markdown("""
+                <div class="zone-bar">
+                    <div class="zone-safe">SAFE (0-40)</div>
+                    <div class="zone-warn">WARN (40-75)</div>
+                    <div class="zone-dang">DANGER (75-100)</div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.plotly_chart(create_gauge(overall_risk_pct, "MASTER OVERALL RISK", status_color, h=280), use_container_width=True)
 
-        # Removed btn_analyze dependency to allow auto-logging or manual logging from sidebar
-        m_type_str = motor_type.split(' ')
-        st.session_state.current_motor_log = {'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Asset': 'Motor Core', 'Risk Level': f"{overall_motor_risk:.1f}%", 'Primary FMEA': display_label, 'Status': sys_status, 'Grade': m_type_str, 'Air Temp [K]': air_temp, 'Core Temp [K]': process_temp, 'RPM': rpm, 'Torque [Nm]': torque, 'Wear [min]': tool_wear, 'Vib RMS': '-', 'Vib Kurt': '-'}
+            st.markdown("---")
+            
+            # --- BOTTOM ROW: The 4 Fault Sub-Gauges ---
+            st.markdown("### 📊 FMEA Fault Probability Analysis")
+            st.markdown("*(Root cause distribution derived from Random Forest arrays)*")
+            
+            g1, g2, g3, g4 = st.columns(4)
+            
+            with g1: st.plotly_chart(create_gauge(p_hdf, "Heat (HDF)", "#E67E22", h=160), use_container_width=True)
+            with g2: st.plotly_chart(create_gauge(p_osf, "Strain (OSF)", "#9B59B6", h=160), use_container_width=True)
+            with g3: st.plotly_chart(create_gauge(p_pwf, "Power (PWF)", "#E74C3C", h=160), use_container_width=True)
+            with g4: st.plotly_chart(create_gauge(p_twf, "Wear (TWF)", "#34495E", h=160), use_container_width=True)
+            
+            df_f = pd.DataFrame({'Fault': list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)')), 'Relative Risk (%)': list((p_hdf, p_osf, p_pwf, p_twf))})
+            fig_bar1 = px.bar(df_f, x='Relative Risk (%)', y='Fault', orientation='h', color='Relative Risk (%)', color_continuous_scale='RdYlGn_r', range_x=list((0,100)), title="Dynamic Fault Impact Distribution")
+            fig_bar1.update_layout(height=250, margin=dict(l=0,r=0,t=40,b=0))
+            st.plotly_chart(fig_bar1, use_container_width=True)
 
-# --- TAB 2: BEARING VIBRATION ---
+            motor_short_name = str(motor_type).split(' ').pop(0)
+
+            # LIVE LOG UPDATE (Stored in memory, appended via Sidebar button)
+            st.session_state.current_motor_log = {'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Asset': 'Motor Core', 'Risk Level': f"{overall_risk_pct:.1f}%", 'Primary FMEA': diag_display, 'Status': sys_status, 'Grade': motor_short_name, 'Air Temp [K]': air_temp, 'Core Temp [K]': process_temp, 'RPM': rpm, 'Torque [Nm]': torque, 'Wear [min]': tool_wear, 'Vib RMS': '-', 'Vib Kurt': '-'}
+        else:
+            st.info("⚠️ Waiting for AI Models to load.")
+
+# ==============================================================================
+# TAB 2: BEARING VIBRATION
+# ==============================================================================
 with tab2:
     cv1, cv2 = st.columns(list((1.5, 1)))
     with cv1:
@@ -298,10 +383,10 @@ with tab2:
         cr_val = 3.5 + (sim_level/100.0)
         
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("RMS", f"{r_val:.3f}")
-        k2.metric("Kurtosis", f"{k_val:.2f}")
-        k3.metric("Peak-to-Peak", f"{p2p_val:.2f}")
-        k4.metric("Crest Factor", f"{cr_val:.2f}")
+        k1.metric("RMS ❓", f"{r_val:.3f}")
+        k2.metric("Kurtosis ❓", f"{k_val:.2f}")
+        k3.metric("Peak-to-Peak ❓", f"{p2p_val:.2f}")
+        k4.metric("Crest Factor ❓", f"{cr_val:.2f}")
 
     with cv2:
         p_b_fail = (sim_level / 100.0)**2 * 100.0
@@ -331,13 +416,9 @@ with tab2:
     
     st.session_state.current_bearing_log = {'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Asset': 'Bearing', 'Risk Level': f"{b_risk:.1f}%", 'Primary FMEA': 'Vibration Anomalies', 'Status': b_status, 'Grade': '-', 'Air Temp [K]': '-', 'Core Temp [K]': '-', 'RPM': '-', 'Torque [Nm]': '-', 'Wear [min]': '-', 'Vib RMS': round(r_val, 3), 'Vib Kurt': round(k_val, 2)}
 
-# Global logging logic
-if st.sidebar.button("📝 Append Current Readings to FMEA Log", use_container_width=True):
-    new_logs = pd.DataFrame(list((st.session_state.current_motor_log, st.session_state.current_bearing_log)))
-    st.session_state.inspection_log = pd.concat(list((new_logs, st.session_state.inspection_log)), ignore_index=True)
-    st.sidebar.success("✅ Log Appended Successfully!")
-
-# --- TAB 3: RELIABILITY FUSION ---
+# ==============================================================================
+# TAB 3: RELIABILITY FUSION
+# ==============================================================================
 with tab3:
     st.markdown("### 🔗 Master Reliability Fusion (Series System)")
     m_frac = st.session_state.motor_risk / 100.0
@@ -362,11 +443,13 @@ with tab3:
         st.plotly_chart(fig_comp, use_container_width=True)
 
     with col_g:
-        st.plotly_chart(create_gauge(integrated_risk, "OVERALL SYSTEM RISK", f_color, h=300), use_container_width=True)
+        st.plotly_chart(create_gauge(integrated_risk, "OVERALL SYSTEM RISK", f_color, max_v=100.0, h=300), use_container_width=True)
         action_text = "EMERGENCY SHUTDOWN REQUIRED" if integrated_risk > 75 else ("SCHEDULE PREVENTIVE MAINTENANCE" if integrated_risk > 40 else "OPTIMAL PRODUCTION CONTINUES")
         st.markdown(f"<div style='text-align:center; padding:15px; background-color:#F8F9FA; border-radius:5px; border: 2px dashed {f_color};'><h4 style='margin:0; color:#555;'>AI Recommended Action:</h4><h3 style='margin:0; color:{f_color};'>{action_text}</h3></div>", unsafe_allow_html=True)
 
-# --- TAB 4: EXECUTIVE SUMMARY ---
+# ==============================================================================
+# TAB 4: EXECUTIVE SUMMARY
+# ==============================================================================
 with tab4:
     integrated_risk = (1.0 - ((1.0 - st.session_state.motor_risk/100.0) * (1.0 - st.session_state.bearing_risk/100.0))) * 100.0
     health_score = 100.0 - integrated_risk
@@ -414,7 +497,7 @@ with tab4:
         st.download_button(label="📥 Download Full Executive Report (CSV)", data=csv_data, file_name='MotorGuard_Executive_Report.csv', mime='text/csv', type="primary")
         st.dataframe(st.session_state.inspection_log.style.apply(highlight_fmea, axis=1), use_container_width=True, hide_index=True, height=250)
     else:
-        st.info("Use the 'Append Current Readings' button in the sidebar to log data here.")
+        st.info("Use the 'Append Readings to Log' button in the sidebar to log data here.")
 
 # =========================================
 # 6. FOOTER
