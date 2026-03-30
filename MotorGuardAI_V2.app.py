@@ -40,9 +40,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-if 'inspection_log' not in st.session_state:
-    st.session_state['inspection_log'] = pd.DataFrame(columns=['Timestamp', 'Asset', 'Risk Level', 'Diagnosis', 'Status'])
-
 if 'authenticated' not in st.session_state:
     st.session_state['authenticated'] = False
 
@@ -118,16 +115,16 @@ def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
         number = {'suffix': "%", 'font': {'size': 20 if height<250 else 28, 'color': color_theme}},
         title = {'text': title, 'font': {'size': 13 if height<250 else 18, 'color': '#555'}},
         gauge = {
-            'axis': {'range': [0, max_val], 'tickwidth': 1, 'tickcolor': "darkblue", 'tickvals':},
+            'axis': {'range': (0, max_val), 'tickwidth': 1, 'tickcolor': "darkblue"},
             'bar': {'color': color_theme},
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
-            'steps': [
-                {'range':, 'color': '#E8F5E9'},  
-                {'range':, 'color': '#FEF9E7'},  
-                {'range':, 'color': '#FDEDEC'}  
-            ],
+            'steps': (
+                {'range': (0, 40), 'color': '#E8F5E9'},  
+                {'range': (40, 75), 'color': '#FEF9E7'},  
+                {'range': (75, 100), 'color': '#FDEDEC'}  
+            ),
             'threshold': {
                 'line': {'color': "black", 'width': 3},
                 'thickness': 0.75,
@@ -149,7 +146,7 @@ with st.sidebar:
         logout()
     st.markdown("---")
     if not models_ready:
-        st.error("⚠️ AI Models not found. Operating in UI Preview Mode.")
+        st.error("⚠️ AI Models not found.")
     else:
         st.success("✅ Edge Sensors Connected.")
 
@@ -166,20 +163,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- TABS SETUP ---
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs((
     "⚙️ Model 1: Motor Diagnostics", 
     "📳 Model 2: NASA Bearing", 
     "🔗 System Reliability Fusion", 
     "📊 Executive Summary"
-])
+))
 
 # =========================================
-# TAB 1: MOTOR DIAGNOSTICS (Your Original V2 Logic)
+# TAB 1: MOTOR DIAGNOSTICS
 # =========================================
 with tab1:
     st.markdown("### ⚙️ Thermomechanical Fault Detection (AI4I)")
     
-    col_input, col_dashboard = st.columns([1, 2.5])
+    col_input, col_dashboard = st.columns((1, 2.5))
     
     with col_input:
         st.markdown("#### 🎛️ Telemetry")
@@ -193,26 +190,26 @@ with tab1:
 
     with col_dashboard:
         if models_ready:
-            # Safe DataFrame creation matching exact training columns
-            motor_cols = ['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
-            motor_df = pd.DataFrame([[motor_options[motor_type], air_temp, process_temp, rpm, torque, tool_wear]], columns=motor_cols)
+            motor_cols = ('Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]')
+            scale_cols = ('Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]')
             
-            # Scale features explicitly
-            scaled_features = scaler1.transform(motor_df[['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']])
-            motor_df[['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']] = scaled_features
+            # Using tuple of tuples to completely avoid list filtering bugs
+            d1_values = ((motor_options[motor_type], air_temp, process_temp, rpm, torque, tool_wear),)
+            motor_df = pd.DataFrame(d1_values, columns=motor_cols)
             
-            # Predict
+            scaled_features = scaler1.transform(motor_df[list(scale_cols)])
+            motor_df[list(scale_cols)] = scaled_features
+            
             probs_matrix = model1.predict_proba(motor_df)
             probs_list = np.array(probs_matrix).flatten().tolist()
             
-            # Map probabilities safely
             p_normal = probs_list * 100.0 if len(probs_list) > 0 else 100.0
             p_hdf_raw = probs_list * 100.0 if len(probs_list) > 1 else 0.0
             p_osf_raw = probs_list * 100.0 if len(probs_list) > 2 else 0.0
             p_pwf_raw = probs_list * 100.0 if len(probs_list) > 3 else 0.0
             p_twf_raw = probs_list * 100.0 if len(probs_list) > 4 else 0.0
 
-            # Expert System (From your V2)
+            # Expert System
             expert_twf = min(50.0 + ((tool_wear - 200) / 40.0) * 45.0, 98.0) if tool_wear >= 200 else 0.0
             power = torque * rpm
             if power > 75000: expert_pwf = min(40.0 + ((power - 75000) / 15000.0) * 55.0, 98.0)
@@ -239,10 +236,9 @@ with tab1:
             st.session_state.motor_risk = overall_motor_risk
             st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
 
-            # UI Update
             status_color = "#00A65A" if overall_motor_risk < 40 else ("#F39C12" if overall_motor_risk < 75 else "#DD4B39")
             
-            c_gauge, c_bars = st.columns([1, 1.5])
+            c_gauge, c_bars = st.columns((1, 1.5))
             with c_gauge:
                 st.plotly_chart(create_industrial_gauge(overall_motor_risk, "MOTOR RISK", status_color, height=250), use_container_width=True)
             with c_bars:
@@ -258,13 +254,12 @@ with tab1:
 with tab2:
     st.markdown("### 📳 High-Frequency Vibration Analysis")
     
-    cv1, cv2 = st.columns([1, 2.5])
+    cv1, cv2 = st.columns((1, 2.5))
     with cv1:
         st.markdown("#### 🎚️ Simulator")
         st.info("Simulating Run-to-Failure degradation.")
         sim_level = st.slider("Degradation Phase (%)", 0, 100, 10)
         
-        # Physics Generation
         r_val = 0.05 + (sim_level/100.0)**2 * 0.20
         k_val = 3.0 + (sim_level/100.0)**1.5 * 5.0
         sk_val = (sim_level/100.0) * 0.5
@@ -275,8 +270,9 @@ with tab2:
 
     with cv2:
         if models_ready:
-            bearing_cols = ['RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor']
-            bearing_df = pd.DataFrame([[r_val, k_val, sk_val, p2p_val, cr_val]], columns=bearing_cols)
+            bearing_cols = ('RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor')
+            d2_values = ((r_val, k_val, sk_val, p2p_val, cr_val),)
+            bearing_df = pd.DataFrame(d2_values, columns=bearing_cols)
             
             scaled_b = scaler2.transform(bearing_df)
             probs_b = np.array(model2.predict_proba(scaled_b)).flatten().tolist()
@@ -294,8 +290,8 @@ with tab2:
             with cb1:
                 st.plotly_chart(create_industrial_gauge(b_risk, "BEARING VIBRATION RISK", b_color, height=280), use_container_width=True)
             with cb2:
-                df_b_faults = pd.DataFrame({'Phase': ['Early Wear', 'Warning', 'Failure'], 'Probability': [p_b_early, p_b_warn, p_b_fail]})
-                fig_b = px.bar(df_b_faults, x='Probability', y='Phase', orientation='h', color='Probability', color_continuous_scale='Purples', range_x=)
+                df_b_faults = pd.DataFrame({'Phase': ('Early Wear', 'Warning', 'Failure'), 'Probability': (p_b_early, p_b_warn, p_b_fail)})
+                fig_b = px.bar(df_b_faults, x='Probability', y='Phase', orientation='h', color='Probability', color_continuous_scale='Purples', range_x=(0,100))
                 fig_b.update_layout(height=280, margin=dict(l=0,r=0,t=30,b=0), title="AI Confidence")
                 st.plotly_chart(fig_b, use_container_width=True)
 
@@ -311,7 +307,7 @@ with tab3:
     
     f_color = "#00A65A" if integrated_risk < 40 else ("#F39C12" if integrated_risk < 75 else "#DD4B39")
     
-    cf1, cf2, cf3 = st.columns([1, 0.2, 1])
+    cf1, cf2, cf3 = st.columns((1, 0.2, 1))
     with cf1:
         st.markdown(f"<div class='metric-card' style='border-left-color:#3498DB;'><h4>Core Motor Risk</h4><h1 style='color:#3498DB;'>{st.session_state.motor_risk:.1f}%</h1></div>", unsafe_allow_html=True)
     with cf2:
@@ -344,17 +340,17 @@ with tab4:
     st.markdown("---")
     st.markdown("#### 🎯 Holistic Fault Distribution Radar")
     
-    categories = ['Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Vibration (Bearing)']
-    values = [
+    categories = ('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Vibration (Bearing)')
+    values = (
         st.session_state.motor_faults['HDF'],
         st.session_state.motor_faults['OSF'],
         st.session_state.motor_faults['PWF'],
         st.session_state.motor_faults['TWF'],
         st.session_state.bearing_risk
-    ]
+    )
     
     fig_radar = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', line_color='#DD4B39'))
-    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=)), showlegend=False, height=450)
+    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=(0, 100))), showlegend=False, height=450)
     st.plotly_chart(fig_radar, use_container_width=True)
 
 # =========================================
