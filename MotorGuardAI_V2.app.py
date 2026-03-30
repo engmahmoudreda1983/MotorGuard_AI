@@ -1,5 +1,5 @@
 # ==============================================================================
-# © 2026 MotorGuard APM | Enterprise Predictive Maintenance System
+# © 2026 MotorGuard AI | Predictive Maintenance & Fault Diagnostics
 # Developed by: Eng. Mahmoud Reda Ibrahim
 # Confidential and Proprietary.
 # ==============================================================================
@@ -15,205 +15,355 @@ from datetime import datetime
 # =========================================
 # 1. PAGE SETUP & THEME
 # =========================================
-st.set_page_config(page_title="MotorGuard APM", page_icon="🏭", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="MotorGuard AI Pro", page_icon="⚙️", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
     .main-header {
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        padding: 25px;
-        border-radius: 12px;
-        border-left: 8px solid #00ff88;
-        color: white;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        margin-bottom: 25px;
-    }
-    .metric-card {
-        background-color: #ffffff;
+        background: linear-gradient(90deg, #1E1E1E 0%, #2D2D2D 100%);
         padding: 20px;
         border-radius: 10px;
-        border-top: 5px solid #3498DB;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border-left: 8px solid #DD4B39;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background-color: #F8F9FA;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #3498DB;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         text-align: center;
+        margin-bottom: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session States
+if 'inspection_log' not in st.session_state:
+    st.session_state['inspection_log'] = pd.DataFrame(columns=['Timestamp', 'Asset', 'Risk Level', 'Diagnosis', 'Status'])
+
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
 if 'motor_risk' not in st.session_state: st.session_state.motor_risk = 0.0
-if 'motor_faults' not in st.session_state: st.session_state.motor_faults = {'HDF':0.0, 'OSF':0.0, 'PWF':0.0, 'TWF':0.0}
 if 'bearing_risk' not in st.session_state: st.session_state.bearing_risk = 0.0
-if 'authenticated' not in st.session_state: st.session_state.authenticated = False
+if 'motor_faults' not in st.session_state: st.session_state.motor_faults = {'HDF': 0.0, 'OSF': 0.0, 'PWF': 0.0, 'TWF': 0.0}
 
 # =========================================
-# 2. AUTHENTICATION SYSTEM
-# =========================================
-def check_password():
-    if st.session_state.authenticated:
-        return True
-
-    col1, col2, col3 = st.columns((1, 2, 1))
-    with col2:
-        st.markdown("""
-        <div style="background-color:#F8F9FA; padding:40px; border-radius:15px; border-top: 5px solid #00ff88; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.1); margin-top: 50px;">
-            <h2 style="color:#1E1E1E; margin-bottom: 0px; font-family: sans-serif;">MotorGuard <span style="color:#00ff88;">APM</span></h2>
-            <p style="color:#666; font-size: 14px; margin-bottom: 25px;">Enterprise Diagnostics Login</p>
-        """, unsafe_allow_html=True)
-        
-        u = st.text_input("Username", key="u_login_field")
-        p = st.text_input("Password", type="password", key="p_login_field")
-        
-        if st.button("Access Dashboard", use_container_width=True, type="primary"):
-            if u == "admin" and p == "DBA2026":
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Invalid Credentials")
-        
-        st.markdown("""
-            <hr>
-            <p style="font-size:11px; color:#888;">
-                © 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim.<br>
-                All Rights Reserved. Confidential.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    return False
-
-if not check_password():
-    st.stop()
-
-# =========================================
-# 3. AI MODELS LOADING
+# 2. AI MODELS LOADING
 # =========================================
 @st.cache_resource
 def load_ai_assets():
     try:
-        # تحميل الملفات الأصلية
         s1 = joblib.load('scaler.pkl')
         m1 = joblib.load('motorguard_model.pkl')
         s2 = joblib.load('nasa_bearing_scaler.pkl')
         m2 = joblib.load('nasa_bearing_model.pkl')
         return s1, m1, s2, m2, True
-    except:
+    except Exception as e:
         return None, None, None, None, False
 
 scaler1, model1, scaler2, model2, models_ready = load_ai_assets()
 
 # =========================================
-# 4. SIDEBAR & LOGOUT
+# 3. HELPER FUNCTIONS & AUTHENTICATION
 # =========================================
-st.sidebar.markdown("### 🖥️ Dashboard Control")
-if st.sidebar.button("🚪 Logout Session", use_container_width=True):
-    st.session_state.authenticated = False
+def check_password():
+    if st.session_state["authenticated"]:
+        return True
+
+    col1, col2, col3 = st.columns((1.5, 2.0, 1.5)) 
+    
+    with col2: 
+        st.markdown("""
+        <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;">
+            <h2 style="color:#1E1E1E; margin-bottom: 5px;">MotorGuard <span style="color:#DD4B39;">AI</span></h2>
+            <p style="color:#666666; font-size: 14px; margin-bottom: 20px;">Secure Industrial Diagnostic Portal</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        user = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        if st.button("Secure Login", use_container_width=True, type="primary"):
+            if user == "admin" and password == "DBA2026":
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("❌ Incorrect Username or Password")
+                
+        st.markdown("""
+        <hr><div style='text-align: center; color: #888888; font-size: 11px;'>
+            <strong>© 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>
+            Confidential and Proprietary. The predictive algorithms and expert system overrides within this application are protected intellectual property.
+        </div>
+        """, unsafe_allow_html=True)
+    return False
+
+def logout():
+    st.session_state["authenticated"] = False
     st.rerun()
-st.sidebar.markdown("---")
-st.sidebar.caption("Eng. Mahmoud Reda Ibrahim")
+
+def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
+    try:
+        safe_value = float(value)
+    except:
+        safe_value = 0.0
+        
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = safe_value,
+        number = {'suffix': "%", 'font': {'size': 20 if height<250 else 28, 'color': color_theme}},
+        title = {'text': title, 'font': {'size': 13 if height<250 else 18, 'color': '#555'}},
+        gauge = {
+            'axis': {'range': [0, max_val], 'tickwidth': 1, 'tickcolor': "darkblue", 'tickvals':},
+            'bar': {'color': color_theme},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range':, 'color': '#E8F5E9'},  
+                {'range':, 'color': '#FEF9E7'},  
+                {'range':, 'color': '#FDEDEC'}  
+            ],
+            'threshold': {
+                'line': {'color': "black", 'width': 3},
+                'thickness': 0.75,
+                'value': safe_value}
+        }))
+    fig.update_layout(height=height, margin=dict(l=15, r=15, t=40, b=10), paper_bgcolor="rgba(0,0,0,0)")
+    return fig
 
 # =========================================
-# 5. MAIN INTERFACE
+# 4. MAIN APP EXECUTION
 # =========================================
+if not check_password():
+    st.stop()
+
+# --- Sidebar Control ---
+with st.sidebar:
+    st.markdown("### 🖥️ Dashboard Control")
+    if st.button("🚪 Secure Logout", use_container_width=True):
+        logout()
+    st.markdown("---")
+    if not models_ready:
+        st.error("⚠️ AI Models not found. Operating in UI Preview Mode.")
+    else:
+        st.success("✅ Edge Sensors Connected.")
+
+# --- Header ---
 st.markdown("""
 <div class="main-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin:0;">🏭 MotorGuard APM <span style="color:#00ff88;">Command Center</span></h1>
-            <p style="margin:0; font-size: 14px; color:#e0e0e0;">Unified Predictive Maintenance | Developed by Eng. Mahmoud Reda Ibrahim</p>
-        </div>
-        <div style="text-align: right;">
-            <p style="margin:0; color:#00ff88; font-weight: bold;">CONNECTED: LIVE TELEMETRY</p>
+            <h2 style="margin:0;">⚙️ MotorGuard AI <span style="color:#DD4B39;">Pro</span></h2>
+            <p style="margin:0; font-size: 14px; color:#CCCCCC;">Enterprise Asset Performance Management</p>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-t1, t2, t3, t4 = st.tabs(["⚙️ Motor Diagnostics", "📳 Vibration Analysis", "🔗 Reliability Fusion", "📊 Executive Summary"])
+# --- TABS SETUP ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "⚙️ Model 1: Motor Diagnostics", 
+    "📳 Model 2: NASA Bearing", 
+    "🔗 System Reliability Fusion", 
+    "📊 Executive Summary"
+])
 
-# --- TAB 1: MOTOR ---
-with t1:
-    col_in, col_out = st.columns((1, 2))
-    with col_in:
-        m_grade = st.selectbox("Motor Quality", ("L", "M", "H"), index=1)
-        air_v = st.number_input("Ambient Temp [K]", 290.0, 310.0, 298.0)
-        proc_v = st.number_input("Core Temp [K]", 300.0, 320.0, 308.0)
-        rpm_v = st.slider("Rotational Speed", 1100, 2900, 1500)
-        trq_v = st.slider("Load Torque", 10.0, 80.0, 40.0)
-        wear_v = st.slider("Tool Wear [min]", 0, 260, 50)
+# =========================================
+# TAB 1: MOTOR DIAGNOSTICS (Your Original V2 Logic)
+# =========================================
+with tab1:
+    st.markdown("### ⚙️ Thermomechanical Fault Detection (AI4I)")
     
-    with col_out:
-        if models_ready:
-            g_val = 0 if m_grade == "L" else (1 if m_grade == "M" else 2)
-            # هذه الأسماء هي ما يتوقعه الـ Scaler الأصلي الخاص بك
-            feature_names = ['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
-            d1 = pd.DataFrame([[g_val, air_v, proc_v, rpm_v, trq_v, wear_v]], columns=feature_names)
-            
-            d1_sc = scaler1.transform(d1)
-            p1 = np.array(model1.predict_proba(d1_sc)).flatten()
-            
-            f_hdf = float(p1) * 100 if len(p1) > 1 else 0.0
-            f_osf = float(p1) * 100 if len(p1) > 2 else 0.0
-            f_pwf = float(p1) * 100 if len(p1) > 3 else 0.0
-            f_twf = float(p1) * 100 if len(p1) > 4 else 0.0
-            
-            m_risk = (1.0 - ((1.0-f_hdf/100)*(1.0-f_osf/100)*(1.0-f_pwf/100)*(1.0-f_twf/100))) * 100
-            st.session_state.motor_risk = m_risk
-            st.session_state.motor_faults = {'HDF':f_hdf, 'OSF':f_osf, 'PWF':p_pwf, 'TWF':f_twf}
-            
-            fig1 = go.Figure(go.Indicator(mode="gauge+number", value=m_risk, title={'text': "Motor Overall Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#3498DB"}}))
-            st.plotly_chart(fig1, use_container_width=True)
+    col_input, col_dashboard = st.columns([1, 2.5])
+    
+    with col_input:
+        st.markdown("#### 🎛️ Telemetry")
+        motor_options = {'L (Low)': 0, 'M (Medium)': 1, 'H (High)': 2}
+        motor_type = st.selectbox("Motor Quality Grade", list(motor_options.keys()), index=1)
+        air_temp = st.number_input("Ambient Temp [K]", 290.0, 310.0, 298.0, 0.1)
+        process_temp = st.number_input("Motor Core Temp [K]", 300.0, 320.0, 308.0, 0.1)
+        rpm = st.slider("Rotational Speed [RPM]", 1100, 2900, 1500, 10)
+        torque = st.slider("Applied Torque [Nm]", 10.0, 80.0, 40.0, 0.5)
+        tool_wear = st.slider("Tool Wear [min]", 0, 260, 50, 1)
 
-# --- TAB 2: BEARING ---
-with t2:
-    cv1, cv2 = st.columns((1, 2))
+    with col_dashboard:
+        if models_ready:
+            # Safe DataFrame creation matching exact training columns
+            motor_cols = ['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
+            motor_df = pd.DataFrame([[motor_options[motor_type], air_temp, process_temp, rpm, torque, tool_wear]], columns=motor_cols)
+            
+            # Scale features explicitly
+            scaled_features = scaler1.transform(motor_df[['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']])
+            motor_df[['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']] = scaled_features
+            
+            # Predict
+            probs_matrix = model1.predict_proba(motor_df)
+            probs_list = np.array(probs_matrix).flatten().tolist()
+            
+            # Map probabilities safely
+            p_normal = probs_list * 100.0 if len(probs_list) > 0 else 100.0
+            p_hdf_raw = probs_list * 100.0 if len(probs_list) > 1 else 0.0
+            p_osf_raw = probs_list * 100.0 if len(probs_list) > 2 else 0.0
+            p_pwf_raw = probs_list * 100.0 if len(probs_list) > 3 else 0.0
+            p_twf_raw = probs_list * 100.0 if len(probs_list) > 4 else 0.0
+
+            # Expert System (From your V2)
+            expert_twf = min(50.0 + ((tool_wear - 200) / 40.0) * 45.0, 98.0) if tool_wear >= 200 else 0.0
+            power = torque * rpm
+            if power > 75000: expert_pwf = min(40.0 + ((power - 75000) / 15000.0) * 55.0, 98.0)
+            elif power < 40000: expert_pwf = min(40.0 + ((40000 - power) / 10000.0) * 55.0, 98.0)
+            else: expert_pwf = 0.0
+            strain = torque * tool_wear
+            strain_limit = 11000 if motor_options[motor_type] == 0 else (12000 if motor_options[motor_type] == 1 else 13000)
+            warning_limit = strain_limit * 0.8
+            expert_osf = min(40.0 + ((strain - warning_limit) / (strain_limit - warning_limit)) * 55.0, 98.0) if strain > warning_limit else 0.0
+            temp_diff = process_temp - air_temp
+            expert_hdf = min(40.0 + ((10.0 - temp_diff) / 2.0) * 55.0, 98.0) if temp_diff <= 10.0 and rpm < 1500 else 0.0
+
+            # Merge
+            p_hdf = max(p_hdf_raw, expert_hdf)
+            p_osf = max(p_osf_raw, expert_osf)
+            p_pwf = max(p_pwf_raw, expert_pwf)
+            p_twf = max(p_twf_raw, expert_twf)
+
+            # Cumulative
+            p_survive = (1.0 - p_hdf/100.0) * (1.0 - p_osf/100.0) * (1.0 - p_pwf/100.0) * (1.0 - p_twf/100.0)
+            calc_risk = (1.0 - p_survive) * 100.0
+            overall_motor_risk = min(max((100.0 - p_normal), calc_risk), 100.0)
+            
+            st.session_state.motor_risk = overall_motor_risk
+            st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
+
+            # UI Update
+            status_color = "#00A65A" if overall_motor_risk < 40 else ("#F39C12" if overall_motor_risk < 75 else "#DD4B39")
+            
+            c_gauge, c_bars = st.columns([1, 1.5])
+            with c_gauge:
+                st.plotly_chart(create_industrial_gauge(overall_motor_risk, "MOTOR RISK", status_color, height=250), use_container_width=True)
+            with c_bars:
+                g1, g2 = st.columns(2)
+                g1.plotly_chart(create_industrial_gauge(p_hdf, "Heat (HDF)", "#E67E22", height=150), use_container_width=True)
+                g2.plotly_chart(create_industrial_gauge(p_osf, "Strain (OSF)", "#9B59B6", height=150), use_container_width=True)
+                g1.plotly_chart(create_industrial_gauge(p_pwf, "Power (PWF)", "#E74C3C", height=150), use_container_width=True)
+                g2.plotly_chart(create_industrial_gauge(p_twf, "Wear (TWF)", "#34495E", height=150), use_container_width=True)
+
+# =========================================
+# TAB 2: BEARING VIBRATION (NASA)
+# =========================================
+with tab2:
+    st.markdown("### 📳 High-Frequency Vibration Analysis")
+    
+    cv1, cv2 = st.columns([1, 2.5])
     with cv1:
-        st.info("Simulation: NASA Run-to-Failure Dataset")
-        deg_lv = st.slider("Bearing Degradation Level", 0, 100, 10)
-        r = 0.05 + (deg_lv/100.0)**2 * 0.20
-        k = 3.0 + (deg_lv/100.0)**1.5 * 5.0
-        sk = (deg_lv/100.0) * 0.5
-        p2p = r * 4.0
-        cr = 3.5 + (deg_lv/100.0)
+        st.markdown("#### 🎚️ Simulator")
+        st.info("Simulating Run-to-Failure degradation.")
+        sim_level = st.slider("Degradation Phase (%)", 0, 100, 10)
+        
+        # Physics Generation
+        r_val = 0.05 + (sim_level/100.0)**2 * 0.20
+        k_val = 3.0 + (sim_level/100.0)**1.5 * 5.0
+        sk_val = (sim_level/100.0) * 0.5
+        p2p_val = r_val * 4.5
+        cr_val = 3.5 + (sim_level/100.0)
+        
+        st.caption(f"**RMS:** {r_val:.3f} | **Kurt:** {k_val:.2f}")
+
     with cv2:
         if models_ready:
-            d2 = pd.DataFrame([[r, k, sk, p2p, cr]], columns=['RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor'])
-            d2_sc = scaler2.transform(d2)
-            p2 = np.array(model2.predict_proba(d2_sc)).flatten()
+            bearing_cols = ['RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor']
+            bearing_df = pd.DataFrame([[r_val, k_val, sk_val, p2p_val, cr_val]], columns=bearing_cols)
             
-            b_risk = (float(p2)*0.4 + float(p2)*0.8 + float(p2)*1.0) * 100 if len(p2) > 1 else 0.0
+            scaled_b = scaler2.transform(bearing_df)
+            probs_b = np.array(model2.predict_proba(scaled_b)).flatten().tolist()
+            
+            p_b_early = probs_b * 100.0 if len(probs_b) > 1 else 0.0
+            p_b_warn = probs_b * 100.0 if len(probs_b) > 2 else 0.0
+            p_b_fail = probs_b * 100.0 if len(probs_b) > 3 else 0.0
+            
+            b_risk = (p_b_early * 0.4) + (p_b_warn * 0.8) + (p_b_fail * 1.0)
             st.session_state.bearing_risk = b_risk
             
-            fig2 = go.Figure(go.Indicator(mode="gauge+number", value=b_risk, title={'text': "Bearing Risk Status"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#9B59B6"}}))
-            st.plotly_chart(fig2, use_container_width=True)
+            b_color = "#00A65A" if b_risk < 40 else ("#F39C12" if b_risk < 75 else "#DD4B39")
+            
+            cb1, cb2 = st.columns(2)
+            with cb1:
+                st.plotly_chart(create_industrial_gauge(b_risk, "BEARING VIBRATION RISK", b_color, height=280), use_container_width=True)
+            with cb2:
+                df_b_faults = pd.DataFrame({'Phase': ['Early Wear', 'Warning', 'Failure'], 'Probability': [p_b_early, p_b_warn, p_b_fail]})
+                fig_b = px.bar(df_b_faults, x='Probability', y='Phase', orientation='h', color='Probability', color_continuous_scale='Purples', range_x=)
+                fig_b.update_layout(height=280, margin=dict(l=0,r=0,t=30,b=0), title="AI Confidence")
+                st.plotly_chart(fig_b, use_container_width=True)
 
-# --- TAB 3: RELIABILITY FUSION ---
-with t3:
+# =========================================
+# TAB 3: RELIABILITY FUSION
+# =========================================
+with tab3:
+    st.markdown("### 🔗 Master System Fusion (Series Configuration)")
+    
     m_frac = st.session_state.motor_risk / 100.0
     b_frac = st.session_state.bearing_risk / 100.0
-    combined_risk = (1.0 - ((1.0 - m_frac) * (1.0 - b_frac))) * 100.0
+    integrated_risk = (1.0 - ((1.0 - m_frac) * (1.0 - b_frac))) * 100.0
     
-    st.markdown("### 🔗 Master Asset Reliability Fusion")
-    st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=combined_risk, title={'text': "INTEGRATED SYSTEM RISK"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#E74C3C"}})), use_container_width=True)
+    f_color = "#00A65A" if integrated_risk < 40 else ("#F39C12" if integrated_risk < 75 else "#DD4B39")
+    
+    cf1, cf2, cf3 = st.columns([1, 0.2, 1])
+    with cf1:
+        st.markdown(f"<div class='metric-card' style='border-left-color:#3498DB;'><h4>Core Motor Risk</h4><h1 style='color:#3498DB;'>{st.session_state.motor_risk:.1f}%</h1></div>", unsafe_allow_html=True)
+    with cf2:
+        st.markdown("<h1 style='text-align:center; margin-top:30px; color:#aaa;'>✖</h1>", unsafe_allow_html=True)
+    with cf3:
+        st.markdown(f"<div class='metric-card' style='border-left-color:#9B59B6;'><h4>Bearing Vib Risk</h4><h1 style='color:#9B59B6;'>{st.session_state.bearing_risk:.1f}%</h1></div>", unsafe_allow_html=True)
+    
+    st.plotly_chart(create_industrial_gauge(integrated_risk, "OVERALL MACHINE RISK", f_color, height=300), use_container_width=True)
 
-# --- TAB 4: EXECUTIVE ---
-with t4:
-    total_f = (1.0 - ((1.0-st.session_state.motor_risk/100.0)*(1.0-st.session_state.bearing_risk/100.0))) * 100.0
-    ex1, ex2, ex3 = st.columns(3)
-    ex1.metric("Asset Health Score", f"{100-total_f:.1f}%")
-    ex2.metric("Unplanned Downtime Risk", f"{total_f:.1f}%")
-    ex3.metric("Maintenance Status", "DANGER" if total_f > 75 else ("WARNING" if total_f > 40 else "OPTIMAL"))
+# =========================================
+# TAB 4: EXECUTIVE SUMMARY
+# =========================================
+with tab4:
+    st.markdown("### 📊 C-Level Executive Dashboard")
     
-    st.markdown("#### Holistic Asset Risk Map")
-    rv = [st.session_state.motor_faults['HDF'], st.session_state.motor_faults['OSF'], st.session_state.motor_faults['PWF'], st.session_state.motor_faults['TWF'], st.session_state.bearing_risk]
-    ct = ['Heat', 'Strain', 'Power', 'Wear', 'Vibration']
-    fig_radar = go.Figure(go.Scatterpolar(r=rv, theta=ct, fill='toself', fillcolor='rgba(0, 255, 136, 0.2)', line=dict(color='#00ff88')))
-    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=(0,100))), showlegend=False)
+    health_score = 100.0 - integrated_risk
+    
+    ex1, ex2, ex3 = st.columns(3)
+    ex1.metric("Asset Health Score", f"{health_score:.1f}%", delta="-Critical" if health_score < 40 else "Nominal", delta_color="inverse")
+    ex2.metric("Unplanned Downtime Prob", f"{integrated_risk:.1f}%")
+    
+    status_text = "EMERGENCY SHUTDOWN" if integrated_risk > 75 else ("SCHEDULE MAINTENANCE" if integrated_risk > 40 else "OPTIMAL PRODUCTION")
+    st.markdown(f"""
+    <div style="background-color:#F8F9FA; padding:15px; border-radius:8px; border-left: 5px solid {f_color};">
+        <h4 style="margin:0; color:#666;">AI Recommended Action</h4>
+        <h3 style="margin:0; color:{f_color};">{status_text}</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("#### 🎯 Holistic Fault Distribution Radar")
+    
+    categories = ['Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Vibration (Bearing)']
+    values = [
+        st.session_state.motor_faults['HDF'],
+        st.session_state.motor_faults['OSF'],
+        st.session_state.motor_faults['PWF'],
+        st.session_state.motor_faults['TWF'],
+        st.session_state.bearing_risk
+    ]
+    
+    fig_radar = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', line_color='#DD4B39'))
+    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=)), showlegend=False, height=450)
     st.plotly_chart(fig_radar, use_container_width=True)
 
-# Footer
+# =========================================
+# 6. FOOTER
+# =========================================
 st.markdown("""
 <br><hr>
-<div style='text-align: center; color: #888888; font-size: 11px;'>
+<div style='text-align: center; color: #888888; font-size: 11px; font-family: sans-serif; line-height: 1.5;'>
     <strong>© 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>
-    Confidential and Proprietary Intellectual Property for DBA Research.
+    Confidential and Proprietary. The predictive algorithms and expert system overrides within this application are protected intellectual property.
 </div>
 """, unsafe_allow_html=True)
