@@ -59,7 +59,6 @@ st.markdown("""
 # =========================================
 # 2. AI MODELS LOADING & MOCK FALLBACK
 # =========================================
-# Dummy models in case .pkl files are not in the same folder during demo
 class DummyMotorModel:
     def predict_proba(self, X): return [[0.9, 0.02, 0.03, 0.03, 0.02]]
     @property
@@ -168,15 +167,20 @@ with tab1:
         st.markdown("</div>", unsafe_allow_html=True)
         
     with col_out:
-        # Data Prep & Prediction
         type_val = 0 if 'L' in motor_type else (1 if 'M' in motor_type else 2)
         raw_df1 = pd.DataFrame({'Type': [type_val], 'Air temperature [K]': [air_temp], 'Process temperature [K]': [process_temp], 'Rotational speed [rpm]': [rpm], 'Torque [Nm]': [torque], 'Tool wear [min]': [tool_wear]})
         processed_df1 = raw_df1.copy()
         cols_to_scale = ['Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
         processed_df1[cols_to_scale] = scaler1.transform(raw_df1[cols_to_scale])
         
-        probs1 = np.array(model1.predict_proba(processed_df1)).flatten()
-        if hasattr(model1, 'classes_'):
+        # Robust Probability Extraction for Model 1
+        probs1_raw = getattr(model1, 'predict_proba')(processed_df1)
+        if isinstance(probs1_raw, list):
+            probs1 = [float(np.array(arr).flatten()[-1]) for arr in probs1_raw]
+        else:
+            probs1 = [float(x) for x in np.array(probs1_raw).flatten().tolist()]
+
+        if hasattr(model1, 'classes_') and not isinstance(probs1_raw, list):
             p_dict = dict(zip([str(c).upper() for c in model1.classes_], probs1))
             p_norm = p_dict.get('NORMAL', 0)*100
             p_hdf = p_dict.get('HEAT DISSIPATION FAILURE (HDF)', p_dict.get('HDF',0))*100
@@ -184,14 +188,12 @@ with tab1:
             p_pwf = p_dict.get('POWER FAILURE (PWF)', p_dict.get('PWF',0))*100
             p_twf = p_dict.get('TOOL WEAR FAILURE (TWF)', p_dict.get('TWF',0))*100
         else:
-            p_norm = probs1*100
-            p_hdf = p_osf = p_pwf = p_twf = 0
+            p_norm = probs1*100 if len(probs1)>0 else 100.0
+            p_hdf = p_osf = p_pwf = p_twf = 0.0
             
-        # Cumulative Logic for Motor
-        p_fail_hdf = p_hdf/100; p_fail_osf = p_osf/100; p_fail_pwf = p_pwf/100; p_fail_twf = p_twf/100
-        motor_overall_risk = (1.0 - ((1-p_fail_hdf)*(1-p_fail_osf)*(1-p_fail_pwf)*(1-p_fail_twf))) * 100
+        p_fail_hdf = p_hdf/100.0; p_fail_osf = p_osf/100.0; p_fail_pwf = p_pwf/100.0; p_fail_twf = p_twf/100.0
+        motor_overall_risk = float((1.0 - ((1.0-p_fail_hdf)*(1.0-p_fail_osf)*(1.0-p_fail_pwf)*(1.0-p_fail_twf))) * 100.0)
         
-        # Save to Session
         st.session_state.motor_risk = motor_overall_risk
         st.session_state.motor_faults = {'HDF':p_hdf, 'OSF':p_osf, 'PWF':p_pwf, 'TWF':p_twf}
         
@@ -217,12 +219,11 @@ with tab2:
         st.markdown("#### 🎚️ Physical Degradation Simulator")
         sim_level = st.slider("Bearing Degradation Phase (%)", 0, 100, 10, help="0%: Brand New | 50%: Early Wear | 85%: Warning | 100%: Total Failure")
         
-        # Physics Simulator logic
-        rms_val = 0.05 + (sim_level/100)**2 * 0.20
-        kurt_val = 3.0 + (sim_level/100)**1.5 * 5.0
-        skew_val = (sim_level/100) * 0.5
-        p2p_val = rms_val * 4.5
-        crest_val = p2p_val / rms_val if rms_val>0 else 0
+        rms_val = float(0.05 + (sim_level/100.0)**2 * 0.20)
+        kurt_val = float(3.0 + (sim_level/100.0)**1.5 * 5.0)
+        skew_val = float((sim_level/100.0) * 0.5)
+        p2p_val = float(rms_val * 4.5)
+        crest_val = float(p2p_val / rms_val if rms_val>0 else 0)
         
         st.markdown("**(Simulated Sensor Outputs):**")
         st.caption(f"RMS: {rms_val:.3f} | Kurtosis: {kurt_val:.2f} | Skewness: {skew_val:.2f}")
@@ -231,21 +232,27 @@ with tab2:
     with col_v2:
         raw_df2 = pd.DataFrame({'RMS':[rms_val], 'Kurtosis':[kurt_val], 'Skewness':[skew_val], 'Peak_to_Peak':[p2p_val], 'Crest_Factor':[crest_val]})
         processed_df2 = scaler2.transform(raw_df2)
-        probs2 = np.array(model2.predict_proba(processed_df2)).flatten()
         
-        # Map NASA classes [0: Normal, 1: Early, 2: Warn, 3: Fail]
-        p_b_norm = probs2*100 if len(probs2)>0 else 100
-        p_b_early = probs2*100 if len(probs2)>1 else 0
-        p_b_warn = probs2*100 if len(probs2)>2 else 0
-        p_b_fail = probs2*100 if len(probs2)>3 else 0
+        # Robust Probability Extraction for Model 2 (Fixes the ValueError)
+        probs2_raw = getattr(model2, 'predict_proba')(processed_df2)
+        probs_list2 = []
+        if isinstance(probs2_raw, list):
+            for arr in probs2_raw:
+                flat_arr = np.array(arr).flatten()
+                probs_list2.append(float(flat_arr if len(flat_arr) > 1 else flat_arr))
+        else:
+            probs_list2 = [float(x) for x in np.array(probs2_raw).flatten().tolist()]
+            
+        p_b_norm = probs_list2*100.0 if len(probs_list2)>0 else 100.0
+        p_b_early = probs_list2*100.0 if len(probs_list2)>1 else 0.0
+        p_b_warn = probs_list2*100.0 if len(probs_list2)>2 else 0.0
+        p_b_fail = probs_list2*100.0 if len(probs_list2)>3 else 0.0
         
-        # Calculate Bearing Risk (Weighted Sum for smooth transition)
-        bearing_overall_risk = (p_b_early*0.4) + (p_b_warn*0.8) + (p_b_fail*1.0)
+        bearing_overall_risk = float((p_b_early*0.4) + (p_b_warn*0.8) + (p_b_fail*1.0))
         
-        # Save to session
         st.session_state.bearing_risk = bearing_overall_risk
-        if bearing_overall_risk < 20: st.session_state.bearing_status = "Healthy"
-        elif bearing_overall_risk < 60: st.session_state.bearing_status = "Micro-cracks Detected"
+        if bearing_overall_risk < 20.0: st.session_state.bearing_status = "Healthy"
+        elif bearing_overall_risk < 60.0: st.session_state.bearing_status = "Micro-cracks Detected"
         else: st.session_state.bearing_status = "Severe Spalling/Failure"
 
         c3, c4 = st.columns(2)
@@ -263,13 +270,11 @@ with tab2:
 with tab3:
     st.markdown("### 🔗 Master Asset Fusion (System of Systems)")
     
-    # Mathematical Fusion Logic
-    m_risk_frac = st.session_state.motor_risk / 100.0
-    b_risk_frac = st.session_state.bearing_risk / 100.0
+    m_risk_frac = float(st.session_state.motor_risk) / 100.0
+    b_risk_frac = float(st.session_state.bearing_risk) / 100.0
     
-    # Cumulative Reliability Equation
-    integrated_risk_frac = 1.0 - ((1.0 - m_risk_frac) * (1.0 - b_risk_frac))
-    integrated_risk_pct = integrated_risk_frac * 100.0
+    integrated_risk_frac = float(1.0 - ((1.0 - m_risk_frac) * (1.0 - b_risk_frac)))
+    integrated_risk_pct = float(integrated_risk_frac * 100.0)
     
     sys_color = "#00A65A" if integrated_risk_pct < 40 else ("#F39C12" if integrated_risk_pct < 75 else "#DD4B39")
     
@@ -290,13 +295,11 @@ with tab3:
 with tab4:
     st.markdown("### 📊 C-Level Executive Overview")
     
-    # Calculate health score safely
-    health_score = 100.0 - (integrated_risk_frac * 100.0)
+    health_score = float(100.0 - integrated_risk_pct)
     health_color = "#00A65A" if health_score > 60 else ("#F39C12" if health_score > 25 else "#DD4B39")
     
-    # Financial Impact Logic
-    base_asset_value = 150000 # $150k machine
-    value_at_risk = base_asset_value * integrated_risk_frac
+    base_asset_value = 150000.0 
+    value_at_risk = float(base_asset_value * integrated_risk_frac)
     
     ex1, ex2, ex3 = st.columns(3)
     with ex1:
@@ -328,15 +331,14 @@ with tab4:
 
     st.markdown("---")
     
-    # Dynamic Radar Chart for full system view
     st.markdown("#### 🎯 Holistic Risk Distribution Map")
     categories = ('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Bearing Wear (Vib)')
     values = (
-        st.session_state.motor_faults['HDF'],
-        st.session_state.motor_faults['OSF'],
-        st.session_state.motor_faults['PWF'],
-        st.session_state.motor_faults['TWF'],
-        st.session_state.bearing_risk
+        float(st.session_state.motor_faults['HDF']),
+        float(st.session_state.motor_faults['OSF']),
+        float(st.session_state.motor_faults['PWF']),
+        float(st.session_state.motor_faults['TWF']),
+        float(st.session_state.bearing_risk)
     )
     
     fig_radar = go.Figure()
