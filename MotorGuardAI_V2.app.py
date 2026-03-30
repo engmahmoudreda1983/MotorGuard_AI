@@ -52,18 +52,18 @@ def check_password():
     if st.session_state.authenticated:
         return True
 
-    c1, c2, c3 = st.columns((1, 2, 1))
-    with c2:
+    col1, col2, col3 = st.columns((1, 2, 1))
+    with col2:
         st.markdown("""
         <div style="background-color:#F8F9FA; padding:40px; border-radius:15px; border-top: 5px solid #00ff88; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.1); margin-top: 50px;">
-            <h2 style="color:#1E1E1E; margin-bottom: 0px;">MotorGuard <span style="color:#00ff88;">APM</span></h2>
-            <p style="color:#666; font-size: 14px; margin-bottom: 25px;">Secure Enterprise Diagnostics Portal</p>
+            <h2 style="color:#1E1E1E; margin-bottom: 0px; font-family: sans-serif;">MotorGuard <span style="color:#00ff88;">APM</span></h2>
+            <p style="color:#666; font-size: 14px; margin-bottom: 25px;">Enterprise Diagnostics Login</p>
         """, unsafe_allow_html=True)
         
-        u = st.text_input("Username", key="u_login")
-        p = st.text_input("Password", type="password", key="p_login")
+        u = st.text_input("Username", key="u_login_field")
+        p = st.text_input("Password", type="password", key="p_login_field")
         
-        if st.button("Log In to System", use_container_width=True, type="primary"):
+        if st.button("Access Dashboard", use_container_width=True, type="primary"):
             if u == "admin" and p == "DBA2026":
                 st.session_state.authenticated = True
                 st.rerun()
@@ -74,7 +74,7 @@ def check_password():
             <hr>
             <p style="font-size:11px; color:#888;">
                 © 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim.<br>
-                All Rights Reserved.
+                All Rights Reserved. Confidential.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -89,6 +89,7 @@ if not check_password():
 @st.cache_resource
 def load_ai_assets():
     try:
+        # تحميل الملفات الأصلية
         s1 = joblib.load('scaler.pkl')
         m1 = joblib.load('motorguard_model.pkl')
         s2 = joblib.load('nasa_bearing_scaler.pkl')
@@ -103,9 +104,11 @@ scaler1, model1, scaler2, model2, models_ready = load_ai_assets()
 # 4. SIDEBAR & LOGOUT
 # =========================================
 st.sidebar.markdown("### 🖥️ Dashboard Control")
-if st.sidebar.button("🚪 Terminate Session", use_container_width=True):
+if st.sidebar.button("🚪 Logout Session", use_container_width=True):
     st.session_state.authenticated = False
     st.rerun()
+st.sidebar.markdown("---")
+st.sidebar.caption("Eng. Mahmoud Reda Ibrahim")
 
 # =========================================
 # 5. MAIN INTERFACE
@@ -114,35 +117,35 @@ st.markdown("""
 <div class="main-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h1 style="margin:0;">🏭 MotorGuard APM <span style="color:#00ff88;">Dashboard</span></h1>
-            <p style="margin:0; font-size: 14px; color:#e0e0e0;">Unified Asset Performance Management | Eng. Mahmoud Reda Ibrahim</p>
+            <h1 style="margin:0;">🏭 MotorGuard APM <span style="color:#00ff88;">Command Center</span></h1>
+            <p style="margin:0; font-size: 14px; color:#e0e0e0;">Unified Predictive Maintenance | Developed by Eng. Mahmoud Reda Ibrahim</p>
         </div>
         <div style="text-align: right;">
-            <p style="margin:0; color:#00ff88; font-weight: bold;">⚡ STATUS: CONNECTED</p>
+            <p style="margin:0; color:#00ff88; font-weight: bold;">CONNECTED: LIVE TELEMETRY</p>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-tabs = st.tabs(["⚙️ Motor Health", "📳 Bearing Vibration", "🔗 System Fusion", "📊 Executive Summary"])
+t1, t2, t3, t4 = st.tabs(["⚙️ Motor Diagnostics", "📳 Vibration Analysis", "🔗 Reliability Fusion", "📊 Executive Summary"])
 
 # --- TAB 1: MOTOR ---
-with tabs:
-    c_in, c_out = st.columns((1, 2))
-    with c_in:
+with t1:
+    col_in, col_out = st.columns((1, 2))
+    with col_in:
         m_grade = st.selectbox("Motor Quality", ("L", "M", "H"), index=1)
         air_v = st.number_input("Ambient Temp [K]", 290.0, 310.0, 298.0)
         proc_v = st.number_input("Core Temp [K]", 300.0, 320.0, 308.0)
         rpm_v = st.slider("Rotational Speed", 1100, 2900, 1500)
-        trq_v = st.slider("Torque [Nm]", 10.0, 80.0, 40.0)
-        wear_v = st.slider("Wear [min]", 0, 260, 50)
+        trq_v = st.slider("Load Torque", 10.0, 80.0, 40.0)
+        wear_v = st.slider("Tool Wear [min]", 0, 260, 50)
     
-    with c_out:
+    with col_out:
         if models_ready:
             g_val = 0 if m_grade == "L" else (1 if m_grade == "M" else 2)
-            # الحل القاتل للـ ValueError: نستخدم أسماء الأعمدة الأصلية بالضبط
-            features1 = ['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
-            d1 = pd.DataFrame([[g_val, air_v, proc_v, rpm_v, trq_v, wear_v]], columns=features1)
+            # هذه الأسماء هي ما يتوقعه الـ Scaler الأصلي الخاص بك
+            feature_names = ['Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]']
+            d1 = pd.DataFrame([[g_val, air_v, proc_v, rpm_v, trq_v, wear_v]], columns=feature_names)
             
             d1_sc = scaler1.transform(d1)
             p1 = np.array(model1.predict_proba(d1_sc)).flatten()
@@ -154,47 +157,52 @@ with tabs:
             
             m_risk = (1.0 - ((1.0-f_hdf/100)*(1.0-f_osf/100)*(1.0-f_pwf/100)*(1.0-f_twf/100))) * 100
             st.session_state.motor_risk = m_risk
-            st.session_state.motor_faults = {'HDF':f_hdf, 'OSF':f_osf, 'PWF':f_pwf, 'TWF':f_twf}
+            st.session_state.motor_faults = {'HDF':f_hdf, 'OSF':f_osf, 'PWF':p_pwf, 'TWF':f_twf}
             
-            st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=m_risk, title={'text': "Motor Overall Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#3498DB"}})), use_container_width=True)
+            fig1 = go.Figure(go.Indicator(mode="gauge+number", value=m_risk, title={'text': "Motor Overall Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#3498DB"}}))
+            st.plotly_chart(fig1, use_container_width=True)
 
 # --- TAB 2: BEARING ---
-with tabs:
+with t2:
     cv1, cv2 = st.columns((1, 2))
     with cv1:
-        st.info("NASA Vibration Simulator")
-        deg = st.slider("Degradation Level (%)", 0, 100, 10)
-        r = 0.05 + (deg/100.0)**2 * 0.20
-        k = 3.0 + (deg/100.0)**1.5 * 5.0
-        sk = (deg/100.0) * 0.5
+        st.info("Simulation: NASA Run-to-Failure Dataset")
+        deg_lv = st.slider("Bearing Degradation Level", 0, 100, 10)
+        r = 0.05 + (deg_lv/100.0)**2 * 0.20
+        k = 3.0 + (deg_lv/100.0)**1.5 * 5.0
+        sk = (deg_lv/100.0) * 0.5
         p2p = r * 4.0
-        cr = 3.5 + (deg/100.0)
+        cr = 3.5 + (deg_lv/100.0)
     with cv2:
         if models_ready:
-            features2 = ['RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor']
-            d2 = pd.DataFrame([[r, k, sk, p2p, cr]], columns=features2)
+            d2 = pd.DataFrame([[r, k, sk, p2p, cr]], columns=['RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor'])
             d2_sc = scaler2.transform(d2)
             p2 = np.array(model2.predict_proba(d2_sc)).flatten()
             
             b_risk = (float(p2)*0.4 + float(p2)*0.8 + float(p2)*1.0) * 100 if len(p2) > 1 else 0.0
             st.session_state.bearing_risk = b_risk
-            st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=b_risk, title={'text': "Bearing Vibration Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#9B59B6"}})), use_container_width=True)
+            
+            fig2 = go.Figure(go.Indicator(mode="gauge+number", value=b_risk, title={'text': "Bearing Risk Status"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#9B59B6"}}))
+            st.plotly_chart(fig2, use_container_width=True)
 
-# --- TAB 3: FUSION ---
-with tabs:
-    m_f = st.session_state.motor_risk / 100.0
-    b_f = st.session_state.bearing_risk / 100.0
-    total_f = (1.0 - ((1.0-m_f)*(1.0-b_f))) * 100.0
-    st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=total_f, title={'text': "INTEGRATED SYSTEM RISK"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#E74C3C"}})), use_container_width=True)
+# --- TAB 3: RELIABILITY FUSION ---
+with t3:
+    m_frac = st.session_state.motor_risk / 100.0
+    b_frac = st.session_state.bearing_risk / 100.0
+    combined_risk = (1.0 - ((1.0 - m_frac) * (1.0 - b_frac))) * 100.0
+    
+    st.markdown("### 🔗 Master Asset Reliability Fusion")
+    st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=combined_risk, title={'text': "INTEGRATED SYSTEM RISK"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#E74C3C"}})), use_container_width=True)
 
 # --- TAB 4: EXECUTIVE ---
-with tabs:
-    total_risk = (1.0 - ((1.0-st.session_state.motor_risk/100.0)*(1.0-st.session_state.bearing_risk/100.0))) * 100.0
+with t4:
+    total_f = (1.0 - ((1.0-st.session_state.motor_risk/100.0)*(1.0-st.session_state.bearing_risk/100.0))) * 100.0
     ex1, ex2, ex3 = st.columns(3)
-    ex1.metric("Asset Health Score", f"{100-total_risk:.1f}%")
-    ex2.metric("Unplanned Downtime Risk", f"{total_risk:.1f}%")
-    ex3.metric("Maintenance Urgency", "CRITICAL" if total_risk > 75 else ("MODERATE" if total_risk > 40 else "OPTIMAL"))
+    ex1.metric("Asset Health Score", f"{100-total_f:.1f}%")
+    ex2.metric("Unplanned Downtime Risk", f"{total_f:.1f}%")
+    ex3.metric("Maintenance Status", "DANGER" if total_f > 75 else ("WARNING" if total_f > 40 else "OPTIMAL"))
     
+    st.markdown("#### Holistic Asset Risk Map")
     rv = [st.session_state.motor_faults['HDF'], st.session_state.motor_faults['OSF'], st.session_state.motor_faults['PWF'], st.session_state.motor_faults['TWF'], st.session_state.bearing_risk]
     ct = ['Heat', 'Strain', 'Power', 'Wear', 'Vibration']
     fig_radar = go.Figure(go.Scatterpolar(r=rv, theta=ct, fill='toself', fillcolor='rgba(0, 255, 136, 0.2)', line=dict(color='#00ff88')))
@@ -202,4 +210,10 @@ with tabs:
     st.plotly_chart(fig_radar, use_container_width=True)
 
 # Footer
-st.markdown("<br><hr><center><p style='color:#888; font-size:11px;'>© 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim. Confidential and Proprietary.</p></center>", unsafe_allow_html=True)
+st.markdown("""
+<br><hr>
+<div style='text-align: center; color: #888888; font-size: 11px;'>
+    <strong>© 2026 MotorGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>
+    Confidential and Proprietary Intellectual Property for DBA Research.
+</div>
+""", unsafe_allow_html=True)
