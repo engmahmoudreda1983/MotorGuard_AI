@@ -58,10 +58,10 @@ def check_password():
     with col2: 
         st.markdown("<div style='background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #00ff88; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;'>", unsafe_allow_html=True)
         st.markdown("<h2 style='color:#1E1E1E; margin-bottom: 5px;'>MotorGuard <span style='color:#00ff88;'>APM</span></h2>", unsafe_allow_html=True)
-        st.markdown("<p style='color:#666; font-size: 14px;'>Secure Enterprise Login</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#666; font-size: 14px;'>Secure Enterprise Login Portal</p>", unsafe_allow_html=True)
         
-        user = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        user = st.text_input("Username", key="login_user")
+        password = st.text_input("Password", type="password", key="login_pass")
         
         if st.button("Access Dashboard", use_container_width=True, type="primary"):
             if user == "admin" and password == "DBA2026":
@@ -69,6 +69,8 @@ def check_password():
                 st.rerun()
             else:
                 st.error("❌ Invalid Credentials")
+        
+        st.markdown("<hr><p style='font-size:10px; color:#888;'>© 2026 Eng. Mahmoud Reda Ibrahim</p>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     return False
 
@@ -94,99 +96,108 @@ scaler1, model1, scaler2, model2, models_loaded = load_ai_assets()
 # =========================================
 # 4. DASHBOARD UI
 # =========================================
+st.sidebar.markdown("### 🖥️ Command Menu")
+if st.sidebar.button("🚪 Logout Session", use_container_width=True):
+    st.session_state.authenticated = False
+    st.rerun()
+
 st.markdown(f"""
 <div class="main-header">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h1 style="margin:0;">🏭 MotorGuard APM <span style="color:#00ff88;">Enterprise</span></h1>
-            <p style="margin:0; font-size: 14px; color:#e0e0e0;">Developed by Eng. Mahmoud Reda Ibrahim</p>
+            <p style="margin:0; font-size: 14px; color:#e0e0e0;">Unified Asset Performance Management | Eng. Mahmoud Reda Ibrahim</p>
         </div>
         <div style="text-align: right;">
-            <p style="margin:0; color:#00ff88; font-weight: bold;">STATUS: CONNECTED</p>
+            <p style="margin:0; color:#00ff88; font-weight: bold;">SYSTEM STATUS: ACTIVE</p>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(("⚙️ Motor Health", "📳 Bearing Vibration", "🔗 System Fusion", "📊 Executive Summary"))
+tabs = st.tabs(("⚙️ Motor Health", "📳 Bearing Vibration", "🔗 System Fusion", "📊 Executive Summary"))
 
 # --- TAB 1: MOTOR ---
-with tab1:
+with tabs:
     col_in, col_out = st.columns((1, 2))
     with col_in:
-        m_type = st.selectbox("Grade", ('L', 'M', 'H'), index=1)
-        air_t = st.number_input("Air Temp", 290.0, 310.0, 298.0)
-        proc_t = st.number_input("Proc Temp", 300.0, 320.0, 308.0)
-        rpm = st.slider("RPM", 1100, 2900, 1500)
-        trq = st.slider("Torque", 10.0, 80.0, 40.0)
-        wear = st.slider("Wear", 0, 260, 50)
+        m_type = st.selectbox("Motor Grade", ('L', 'M', 'H'), index=1)
+        air_t = st.number_input("Ambient Air Temp", 290.0, 310.0, 298.0)
+        proc_t = st.number_input("Motor Core Temp", 300.0, 320.0, 308.0)
+        rpm = st.slider("Rotational Speed", 1100, 2900, 1500)
+        trq = st.slider("Operating Torque", 10.0, 80.0, 40.0)
+        wear = st.slider("Operating Wear", 0, 260, 50)
     
     with col_out:
         if models_loaded:
             t_val = 0 if m_type=='L' else (1 if m_type=='M' else 2)
-            d1 = pd.DataFrame({'Type':[t_val], 'Air temperature [K]':[air_t], 'Process temperature [K]':[proc_t], 'Rotational speed [rpm]':[rpm], 'Torque [Nm]':[trq], 'Tool wear [min]':[wear]})
+            # تم استخدام القيم مباشرة لتجنب مسح المصفوفات
+            d1_data = {'Type': (t_val,), 'Air temperature [K]': (air_t,), 'Process temperature [K]': (proc_t,), 'Rotational speed [rpm]': (rpm,), 'Torque [Nm]': (trq,), 'Tool wear [min]': (wear,)}
+            d1 = pd.DataFrame(d1_data)
             d1_sc = scaler1.transform(d1)
-            p1_raw = model1.predict_proba(d1_sc)
-            p1 = np.array(p1_raw).flatten()
+            p1 = np.array(model1.predict_proba(d1_sc)).flatten()
             
-            # Safe Map
-            p_hdf = float(p1)*100 if len(p1)>1 else 0
-            p_osf = float(p1)*100 if len(p1)>2 else 0
-            p_pwf = float(p1)*100 if len(p1)>3 else 0
-            p_twf = float(p1)*100 if len(p1)>4 else 0
+            p_hdf = float(p1)*100 if len(p1)>1 else 0.0
+            p_osf = float(p1)*100 if len(p1)>2 else 0.0
+            p_pwf = float(p1)*100 if len(p1)>3 else 0.0
+            p_twf = float(p1)*100 if len(p1)>4 else 0.0
             
-            risk1 = (1.0 - ((1-p_hdf/100)*(1-p_osf/100)*(1-p_pwf/100)*(1-p_twf/100))) * 100
-            st.session_state.motor_risk = risk1
+            m_risk = (1.0 - ((1.0-p_hdf/100.0)*(1.0-p_osf/100.0)*(1.0-p_pwf/100.0)*(1.0-p_twf/100.0))) * 100.0
+            st.session_state.motor_risk = m_risk
             st.session_state.motor_faults = {'HDF':p_hdf, 'OSF':p_osf, 'PWF':p_pwf, 'TWF':p_twf}
             
-            fig1 = go.Figure(go.Indicator(mode="gauge+number", value=risk1, title={'text': "Motor Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#3498DB"}}))
+            fig1 = go.Figure(go.Indicator(mode="gauge+number", value=m_risk, title={'text': "Motor Overall Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#3498DB"}}))
             st.plotly_chart(fig1, use_container_width=True)
 
 # --- TAB 2: BEARING ---
-with tab2:
+with tabs:
     col_v1, col_v2 = st.columns((1, 2))
     with col_v1:
-        sim = st.slider("Degradation (%)", 0, 100, 10)
-        r_v = 0.05 + (sim/100)**2 * 0.20
-        k_v = 3.0 + (sim/100)**1.5 * 5.0
+        st.info("Simulation of NASA Run-to-Failure Vibration Data")
+        sim = st.slider("Bearing Degradation Level (%)", 0, 100, 10)
+        # مخرجات فيزيائية تدرجية
+        r_v = 0.05 + (sim/100.0)**2 * 0.20
+        k_v = 3.0 + (sim/100.0)**1.5 * 5.0
+        sk_v = (sim/100.0) * 0.5
+        p2p = r_v * 4.0
+        cr_v = 3.5 + (sim/100.0)
     with col_v2:
         if models_loaded:
-            d2 = pd.DataFrame({'RMS':[r_v], 'Kurtosis':[k_v], 'Skewness':, 'Peak_to_Peak':, 'Crest_Factor':})
+            # تم استخدام القيم بمتغيرات لتجنب الأقواس المربعة الفارغة
+            v_data = {'RMS': (r_v,), 'Kurtosis': (k_v,), 'Skewness': (sk_v,), 'Peak_to_Peak': (p2p,), 'Crest_Factor': (cr_v,)}
+            d2 = pd.DataFrame(v_data)
             d2_sc = scaler2.transform(d2)
-            p2_raw = model2.predict_proba(d2_sc)
-            p2 = np.array(p2_raw).flatten()
+            p2 = np.array(model2.predict_proba(d2_sc)).flatten()
             
-            risk2 = (float(p2)*0.4 + float(p2)*0.8 + float(p2)*1.0) * 100 if len(p2)>1 else 0
-            st.session_state.bearing_risk = risk2
+            b_risk = (float(p2)*0.4 + float(p2)*0.8 + float(p2)*1.0) * 100.0 if len(p2)>1 else 0.0
+            st.session_state.bearing_risk = b_risk
             
-            fig2 = go.Figure(go.Indicator(mode="gauge+number", value=risk2, title={'text': "Bearing Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#9B59B6"}}))
+            fig2 = go.Figure(go.Indicator(mode="gauge+number", value=b_risk, title={'text': "Bearing Vibration Risk"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#9B59B6"}}))
             st.plotly_chart(fig2, use_container_width=True)
 
 # --- TAB 3: FUSION ---
-with tab3:
-    m_f = st.session_state.motor_risk / 100
-    b_f = st.session_state.bearing_risk / 100
-    total_f = (1.0 - ((1-m_f)*(1-b_f))) * 100
+with tabs:
+    m_f = st.session_state.motor_risk / 100.0
+    b_f = st.session_state.bearing_risk / 100.0
+    total_f = (1.0 - ((1.0-m_f)*(1.0-b_f))) * 100.0
     
-    st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=total_f, title={'text': "MASTER ASSET RISK"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#E74C3C"}})), use_container_width=True)
+    st.markdown("### 🔗 System Reliability Fusion (Series Configuration)")
+    st.plotly_chart(go.Figure(go.Indicator(mode="gauge+number", value=total_f, title={'text': "INTEGRATED ASSET RISK"}, gauge={'axis':{'range':(0,100)}, 'bar':{'color':"#E74C3C"}})), use_container_width=True)
 
 # --- TAB 4: EXECUTIVE ---
-with tab4:
-    h_score = 100 - total_f
+with tabs:
+    h_score = 100.0 - total_f
     c1, c2, c3 = st.columns(3)
-    c1.metric("Health Score", f"{h_score:.1f}%")
-    c2.metric("Downtime Prob", f"{total_f:.1f}%")
-    c3.metric("Status", "CRITICAL" if total_f>75 else "STABLE")
+    with c1: st.metric("Overall Health", f"{h_score:.1f}%")
+    with c2: st.metric("Downtime Probability", f"{total_f:.1f}%")
+    with c3: st.metric("System Status", "CRITICAL" if total_f>75 else ("STABLE" if total_f<40 else "WARNING"))
     
-    st.markdown("#### Holistic Risk Profile")
+    st.markdown("#### Holistic Asset Risk Profile")
     vals = [st.session_state.motor_faults['HDF'], st.session_state.motor_faults['OSF'], st.session_state.motor_faults['PWF'], st.session_state.motor_faults['TWF'], st.session_state.bearing_risk]
     cats = ['Heat', 'Strain', 'Power', 'Wear', 'Vibration']
-    fig_r = go.Figure(go.Scatterpolar(r=vals, theta=cats, fill='toself'))
-    fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=(0,100))))
+    fig_r = go.Figure(go.Scatterpolar(r=vals, theta=cats, fill='toself', fillcolor='rgba(231, 76, 60, 0.3)', line=dict(color='#E74C3C')))
+    fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=(0,100))), showlegend=False)
     st.plotly_chart(fig_r, use_container_width=True)
 
-# --- LOGOUT ---
-st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Logout Session"):
-    st.session_state.authenticated = False
-    st.rerun()
+# Footer
+st.markdown("<br><hr><center><p style='color:#888;'>© 2026 MotorGuard APM | Developed by Eng. Mahmoud Reda Ibrahim</p></center>", unsafe_allow_html=True)
