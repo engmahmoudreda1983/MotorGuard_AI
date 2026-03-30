@@ -146,7 +146,7 @@ st.markdown("""
 
 tab1, tab2, tab3, tab4 = st.tabs(list(("⚙️ Motor Diagnostics", "📳 Bearing Vibration", "🔗 Reliability Fusion", "📊 Executive Summary")))
 
-# --- TAB 1: MOTOR DIAGNOSTICS ---
+# --- TAB 1: MOTOR DIAGNOSTICS (EXACTLY YOUR V1 LOGIC) ---
 with tab1:
     c_in, c_out = st.columns(list((1, 2.5)))
     with c_in:
@@ -168,18 +168,27 @@ with tab1:
         ai_conf = 100.0
         
         if models_ready:
-            c_air = 'Air temperature [K]'
-            c_proc = 'Process temperature [K]'
-            c_rpm = 'Rotational speed [rpm]'
-            c_trq = 'Torque [Nm]'
-            c_wear = 'Tool wear [min]'
-            motor_cols = list(('Type', c_air, c_proc, c_rpm, c_trq, c_wear))
-            scale_cols = list((c_air, c_proc, c_rpm, c_trq, c_wear))
+            # بناء المصفوفة بعناية لتجنب أخطاء المنصة (Platform Brackets Bug)
+            c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
+            c_proc = 'Process temperature ' + chr(91) + 'K' + chr(93)
+            c_rpm = 'Rotational speed ' + chr(91) + 'rpm' + chr(93)
+            c_trq = 'Torque ' + chr(91) + 'Nm' + chr(93)
+            c_wear = 'Tool wear ' + chr(91) + 'min' + chr(93)
             
-            d1_vals = list(((motor_options.get(motor_type), air_temp, process_temp, rpm, torque, tool_wear),))
-            motor_df = pd.DataFrame(d1_vals, columns=motor_cols)
+            raw_data = {
+                'Type': list((motor_options.get(motor_type),)),
+                c_air: list((air_temp,)),
+                c_proc: list((process_temp,)),
+                c_rpm: list((rpm,)),
+                c_trq: list((torque,)),
+                c_wear: list((tool_wear,))
+            }
+            
+            motor_df = pd.DataFrame(raw_data)
+            scale_cols = list((c_air, c_proc, c_rpm, c_trq, c_wear))
             motor_df[scale_cols] = scaler1.transform(motor_df[scale_cols])
             
+            # --- START OF YOUR EXACT V1 LOGIC ---
             prediction_matrix = getattr(model1, 'predict')(motor_df)
             diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
             
@@ -191,51 +200,34 @@ with tab1:
                 probs_dict = dict(zip(classes, probs_list))
                 
                 p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
+                
                 p_hdf_raw = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
                 p_osf_raw = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
                 p_pwf_raw = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
                 p_twf_raw = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
+                
+                raw_overall_risk = 100.0 - p_normal
+                
+                # ✅ دالة التكبير المتقدمة الخاصة بك (Smart Scaling from V1)
+                if raw_overall_risk >= 85.0:
+                    overall_motor_risk = 100.0
+                else:
+                    overall_motor_risk = raw_overall_risk
+
+                max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
+                if max_fault > 0:
+                    scale_factor = overall_motor_risk / max_fault
+                    p_hdf = min(100.0, p_hdf_raw * scale_factor)
+                    p_osf = min(100.0, p_osf_raw * scale_factor)
+                    p_pwf = min(100.0, p_pwf_raw * scale_factor)
+                    p_twf = min(100.0, p_twf_raw * scale_factor)
+                else:
+                    p_hdf = p_osf = p_pwf = p_twf = 0.0
             else:
                 p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
-                p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
-                
-            # 💡 PHYSICS OVERRIDE: Prevent "Idling" Anomaly False Positives
-            if rpm < 1300 and torque < 25.0:
-                p_normal = 100.0
-                p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
-                diag_label = 'NORMAL'
-
-            # 💡 PHYSICS OVERRIDE: Break ML Limits if conditions are extreme
-            power = torque * rpm
-            if power > 75000: p_pwf_raw = max(p_pwf_raw, min(100.0, (power - 75000) / 150.0))
-            strain = torque * tool_wear
-            strain_lim = 11000 if motor_options.get(motor_type) == 0 else (12000 if motor_options.get(motor_type) == 1 else 13000)
-            if strain > strain_lim: p_osf_raw = max(p_osf_raw, min(100.0, (strain - strain_lim) / 50.0))
-            if tool_wear > 200: p_twf_raw = max(p_twf_raw, min(100.0, (tool_wear - 200) * 2.0))
-            temp_diff = process_temp - air_temp
-            if temp_diff <= 10.0 and rpm < 1500: p_hdf_raw = max(p_hdf_raw, 85.0)
-            if process_temp > 315.0: p_hdf_raw = max(p_hdf_raw, 95.0)
-
-            # --- SMART SCALING (From Your Original V1) ---
-            raw_overall_risk = 100.0 - p_normal
-            max_phys_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
-            if max_phys_fault > raw_overall_risk: raw_overall_risk = max_phys_fault
-            
-            ai_conf = p_normal if raw_overall_risk < 50 else raw_overall_risk
-            
-            if raw_overall_risk >= 85.0:
-                overall_motor_risk = 100.0
-            else:
-                overall_motor_risk = raw_overall_risk
-
-            if max_phys_fault > 0:
-                scale_factor = overall_motor_risk / max_phys_fault
-                p_hdf = min(100.0, p_hdf_raw * scale_factor)
-                p_osf = min(100.0, p_osf_raw * scale_factor)
-                p_pwf = min(100.0, p_pwf_raw * scale_factor)
-                p_twf = min(100.0, p_twf_raw * scale_factor)
-            else:
                 p_hdf = p_osf = p_pwf = p_twf = 0.0
+                overall_motor_risk = 100.0 - p_normal
+            # --- END OF YOUR EXACT V1 LOGIC ---
 
         st.session_state.motor_risk = overall_motor_risk
         st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
@@ -245,8 +237,7 @@ with tab1:
         status_bg = "#E8F5E9" if sys_status=="Safe" else ("#FEF9E7" if sys_status=="Warning" else "#FDEDEC")
         
         display_label = diag_label if diag_label.upper() != 'NORMAL' else 'NO IMMINENT FAILURE'
-        if max_phys_fault > 40 and display_label == 'NO IMMINENT FAILURE':
-            display_label = max(st.session_state.motor_faults, key=st.session_state.motor_faults.get)
+        ai_conf = p_normal if overall_motor_risk < 50 else overall_motor_risk
 
         cA, cB = st.columns(list((1, 1.5)))
         with cA:
@@ -256,7 +247,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             st.markdown(f"<div class='metric-card'><h4>AI Confidence Score</h4><h2 style='color:#3498DB;'>{ai_conf:.1f}%</h2></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Primary Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Model Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
         with cB:
             st.markdown("""
             <div class="zone-bar">
