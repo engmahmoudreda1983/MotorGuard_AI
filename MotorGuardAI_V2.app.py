@@ -41,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if 'authenticated' not in st.session_state:
-    st.session_state['authenticated'] = False
+    st.session_state.authenticated = False
 
 if 'motor_risk' not in st.session_state: st.session_state.motor_risk = 0.0
 if 'bearing_risk' not in st.session_state: st.session_state.bearing_risk = 0.0
@@ -67,7 +67,7 @@ scaler1, model1, scaler2, model2, models_ready = load_ai_assets()
 # 3. HELPER FUNCTIONS & AUTHENTICATION
 # =========================================
 def check_password():
-    if st.session_state["authenticated"]:
+    if st.session_state.authenticated:
         return True
 
     col1, col2, col3 = st.columns((1.5, 2.0, 1.5)) 
@@ -86,7 +86,7 @@ def check_password():
         
         if st.button("Secure Login", use_container_width=True, type="primary"):
             if user == "admin" and password == "DBA2026":
-                st.session_state["authenticated"] = True
+                st.session_state.authenticated = True
                 st.rerun()
             else:
                 st.error("❌ Incorrect Username or Password")
@@ -100,7 +100,7 @@ def check_password():
     return False
 
 def logout():
-    st.session_state["authenticated"] = False
+    st.session_state.authenticated = False
     st.rerun()
 
 def create_industrial_gauge(value, title, color_theme, max_val=100, height=200):
@@ -182,19 +182,25 @@ with tab1:
         st.markdown("#### 🎛️ Telemetry")
         motor_options = {'L (Low)': 0, 'M (Medium)': 1, 'H (High)': 2}
         motor_type = st.selectbox("Motor Quality Grade", list(motor_options.keys()), index=1)
-        air_temp = st.number_input("Ambient Temp [K]", 290.0, 310.0, 298.0, 0.1)
-        process_temp = st.number_input("Motor Core Temp [K]", 300.0, 320.0, 308.0, 0.1)
-        rpm = st.slider("Rotational Speed [RPM]", 1100, 2900, 1500, 10)
-        torque = st.slider("Applied Torque [Nm]", 10.0, 80.0, 40.0, 0.5)
-        tool_wear = st.slider("Tool Wear [min]", 0, 260, 50, 1)
+        air_temp = st.number_input("Ambient Temp", 290.0, 310.0, 298.0, 0.1)
+        process_temp = st.number_input("Motor Core Temp", 300.0, 320.0, 308.0, 0.1)
+        rpm = st.slider("Rotational Speed", 1100, 2900, 1500, 10)
+        torque = st.slider("Applied Torque", 10.0, 80.0, 40.0, 0.5)
+        tool_wear = st.slider("Tool Wear", 0, 260, 50, 1)
 
     with col_dashboard:
         if models_ready:
-            motor_cols = ('Type', 'Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]')
-            scale_cols = ('Air temperature [K]', 'Process temperature [K]', 'Rotational speed [rpm]', 'Torque [Nm]', 'Tool wear [min]')
+            # We reconstruct the exact column names the scaler expects using string concatenation
+            c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
+            c_proc = 'Process temperature ' + chr(91) + 'K' + chr(93)
+            c_rpm = 'Rotational speed ' + chr(91) + 'rpm' + chr(93)
+            c_trq = 'Torque ' + chr(91) + 'Nm' + chr(93)
+            c_wear = 'Tool wear ' + chr(91) + 'min' + chr(93)
             
-            # Using tuple of tuples to completely avoid list filtering bugs
-            d1_values = ((motor_options[motor_type], air_temp, process_temp, rpm, torque, tool_wear),)
+            motor_cols = ('Type', c_air, c_proc, c_rpm, c_trq, c_wear)
+            scale_cols = (c_air, c_proc, c_rpm, c_trq, c_wear)
+            
+            d1_values = ((motor_options.get(motor_type), air_temp, process_temp, rpm, torque, tool_wear),)
             motor_df = pd.DataFrame(d1_values, columns=motor_cols)
             
             scaled_features = scaler1.transform(motor_df[list(scale_cols)])
@@ -203,11 +209,12 @@ with tab1:
             probs_matrix = model1.predict_proba(motor_df)
             probs_list = np.array(probs_matrix).flatten().tolist()
             
-            p_normal = probs_list * 100.0 if len(probs_list) > 0 else 100.0
-            p_hdf_raw = probs_list * 100.0 if len(probs_list) > 1 else 0.0
-            p_osf_raw = probs_list * 100.0 if len(probs_list) > 2 else 0.0
-            p_pwf_raw = probs_list * 100.0 if len(probs_list) > 3 else 0.0
-            p_twf_raw = probs_list * 100.0 if len(probs_list) > 4 else 0.0
+            # THE FIX: Using __getitem__ instead of square brackets to prevent platform from deleting them
+            p_normal = probs_list.__getitem__(0) * 100.0 if len(probs_list) > 0 else 100.0
+            p_hdf_raw = probs_list.__getitem__(1) * 100.0 if len(probs_list) > 1 else 0.0
+            p_osf_raw = probs_list.__getitem__(2) * 100.0 if len(probs_list) > 2 else 0.0
+            p_pwf_raw = probs_list.__getitem__(3) * 100.0 if len(probs_list) > 3 else 0.0
+            p_twf_raw = probs_list.__getitem__(4) * 100.0 if len(probs_list) > 4 else 0.0
 
             # Expert System
             expert_twf = min(50.0 + ((tool_wear - 200) / 40.0) * 45.0, 98.0) if tool_wear >= 200 else 0.0
@@ -216,7 +223,7 @@ with tab1:
             elif power < 40000: expert_pwf = min(40.0 + ((40000 - power) / 10000.0) * 55.0, 98.0)
             else: expert_pwf = 0.0
             strain = torque * tool_wear
-            strain_limit = 11000 if motor_options[motor_type] == 0 else (12000 if motor_options[motor_type] == 1 else 13000)
+            strain_limit = 11000 if motor_options.get(motor_type) == 0 else (12000 if motor_options.get(motor_type) == 1 else 13000)
             warning_limit = strain_limit * 0.8
             expert_osf = min(40.0 + ((strain - warning_limit) / (strain_limit - warning_limit)) * 55.0, 98.0) if strain > warning_limit else 0.0
             temp_diff = process_temp - air_temp
@@ -277,9 +284,10 @@ with tab2:
             scaled_b = scaler2.transform(bearing_df)
             probs_b = np.array(model2.predict_proba(scaled_b)).flatten().tolist()
             
-            p_b_early = probs_b * 100.0 if len(probs_b) > 1 else 0.0
-            p_b_warn = probs_b * 100.0 if len(probs_b) > 2 else 0.0
-            p_b_fail = probs_b * 100.0 if len(probs_b) > 3 else 0.0
+            # Using __getitem__ here as well
+            p_b_early = probs_b.__getitem__(1) * 100.0 if len(probs_b) > 1 else 0.0
+            p_b_warn = probs_b.__getitem__(2) * 100.0 if len(probs_b) > 2 else 0.0
+            p_b_fail = probs_b.__getitem__(3) * 100.0 if len(probs_b) > 3 else 0.0
             
             b_risk = (p_b_early * 0.4) + (p_b_warn * 0.8) + (p_b_fail * 1.0)
             st.session_state.bearing_risk = b_risk
@@ -342,10 +350,10 @@ with tab4:
     
     categories = ('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Vibration (Bearing)')
     values = (
-        st.session_state.motor_faults['HDF'],
-        st.session_state.motor_faults['OSF'],
-        st.session_state.motor_faults['PWF'],
-        st.session_state.motor_faults['TWF'],
+        st.session_state.motor_faults.get('HDF'),
+        st.session_state.motor_faults.get('OSF'),
+        st.session_state.motor_faults.get('PWF'),
+        st.session_state.motor_faults.get('TWF'),
         st.session_state.bearing_risk
     )
     
