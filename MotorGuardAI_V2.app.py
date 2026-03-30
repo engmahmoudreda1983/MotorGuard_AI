@@ -63,12 +63,12 @@ st.markdown("""
 class DummyMotorModel:
     def predict_proba(self, X): return [[0.9, 0.02, 0.03, 0.03, 0.02]]
     @property
-    def classes_(self): return ['NORMAL', 'HDF', 'OSF', 'PWF', 'TWF']
+    def classes_(self): return ('NORMAL', 'HDF', 'OSF', 'PWF', 'TWF')
 
 class DummyBearingModel:
     def predict_proba(self, X): return [[0.8, 0.15, 0.04, 0.01]]
     @property
-    def classes_(self): return ['0: Normal', '1: Early Wear', '2: Warning', '3: Failure']
+    def classes_(self): return ('0: Normal', '1: Early Wear', '2: Warning', '3: Failure')
 
 class DummyScaler:
     def transform(self, X): return X
@@ -136,12 +136,12 @@ if not models_loaded:
 # =========================================
 # 5. TABS SETUP
 # =========================================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs((
     "⚙️ Model 1: CNC Motor Diagnostics", 
     "📳 Model 2: Vibration Analysis (NASA)", 
     "🔗 System Fusion & FMEA", 
     "📊 Executive Command Center"
-])
+))
 
 # --- STATE VARIABLES ---
 if 'motor_risk' not in st.session_state: st.session_state.motor_risk = 0.0
@@ -155,11 +155,11 @@ if 'bearing_status' not in st.session_state: st.session_state.bearing_status = "
 with tab1:
     st.markdown("### ⚙️ Thermomechanical AI Engine (AI4I Dataset)")
     
-    col_in, col_out = st.columns()
+    col_in, col_out = st.columns((1, 2))
     
     with col_in:
         st.markdown("<div style='background-color:#f4f6f9; padding:15px; border-radius:10px;'>", unsafe_allow_html=True)
-        motor_type = st.selectbox("Motor Grade", ['L (Low)', 'M (Medium)', 'H (High)'], index=1)
+        motor_type = st.selectbox("Motor Grade", ('L (Low)', 'M (Medium)', 'H (High)'), index=1)
         air_temp = st.number_input("Ambient Temp [K]", 290.0, 310.0, 298.0)
         process_temp = st.number_input("Core Temp [K]", 300.0, 320.0, 308.0)
         rpm = st.slider("Speed [RPM]", 1100, 2900, 1500)
@@ -199,8 +199,8 @@ with tab1:
         with c1: st.plotly_chart(create_industrial_gauge(motor_overall_risk, "Motor Core Risk", "#3498DB", height=250), use_container_width=True)
         with c2:
             st.markdown("#### Fault Distribution")
-            df_faults = pd.DataFrame({'Fault': ['Heat', 'Strain', 'Power', 'Wear'], 'Risk': [p_hdf, p_osf, p_pwf, p_twf]})
-            fig_bar = px.bar(df_faults, x='Fault', y='Risk', color='Risk', color_continuous_scale='Reds', range_y=)
+            df_faults = pd.DataFrame({'Fault': ('Heat', 'Strain', 'Power', 'Wear'), 'Risk': (p_hdf, p_osf, p_pwf, p_twf)})
+            fig_bar = px.bar(df_faults, x='Fault', y='Risk', color='Risk', color_continuous_scale='Reds', range_y=(0,100))
             fig_bar.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -210,7 +210,7 @@ with tab1:
 with tab2:
     st.markdown("### 📳 High-Frequency Vibration Analysis (NASA Bearing Dataset)")
     
-    col_v1, col_v2 = st.columns()
+    col_v1, col_v2 = st.columns((1, 2))
     
     with col_v1:
         st.markdown("<div style='background-color:#fff3e0; padding:15px; border-radius:10px; border: 1px solid #ffb74d;'>", unsafe_allow_html=True)
@@ -252,8 +252,8 @@ with tab2:
         with c3: st.plotly_chart(create_industrial_gauge(bearing_overall_risk, "Bearing Risk Score", "#9B59B6", height=250), use_container_width=True)
         with c4:
             st.markdown("#### AI Classification Confidence")
-            df_b_faults = pd.DataFrame({'Phase': ['Normal', 'Early Wear', 'Warning', 'Failure'], 'Prob': [p_b_norm, p_b_early, p_b_warn, p_b_fail]})
-            fig_b_bar = px.bar(df_b_faults, x='Prob', y='Phase', orientation='h', color='Prob', color_continuous_scale='Purples', range_x=)
+            df_b_faults = pd.DataFrame({'Phase': ('Normal', 'Early Wear', 'Warning', 'Failure'), 'Prob': (p_b_norm, p_b_early, p_b_warn, p_b_fail)})
+            fig_b_bar = px.bar(df_b_faults, x='Prob', y='Phase', orientation='h', color='Prob', color_continuous_scale='Purples', range_x=(0,100))
             fig_b_bar.update_layout(height=200, margin=dict(l=0,r=0,t=0,b=0))
             st.plotly_chart(fig_b_bar, use_container_width=True)
 
@@ -273,7 +273,7 @@ with tab3:
     
     sys_color = "#00A65A" if integrated_risk_pct < 40 else ("#F39C12" if integrated_risk_pct < 75 else "#DD4B39")
     
-    fc1, fc2, fc3 = st.columns([1, 0.2, 1])
+    fc1, fc2, fc3 = st.columns((1, 0.2, 1))
     with fc1:
         st.markdown(f"<div class='metric-card' style='border-top-color:#3498DB;'><h4>Motor Risk</h4><h1 style='color:#3498DB;'>{st.session_state.motor_risk:.1f}%</h1></div>", unsafe_allow_html=True)
     with fc2:
@@ -290,14 +290,13 @@ with tab3:
 with tab4:
     st.markdown("### 📊 C-Level Executive Overview")
     
-    health_score = 100.0 - integrated_risk_pct
+    # Calculate health score safely
+    health_score = 100.0 - (integrated_risk_frac * 100.0)
     health_color = "#00A65A" if health_score > 60 else ("#F39C12" if health_score > 25 else "#DD4B39")
     
-    # Financial Impact Logic (Mock logic for presentation)
+    # Financial Impact Logic
     base_asset_value = 150000 # $150k machine
-    downtime_cost_per_hr = 5000
-    risk_factor = integrated_risk_pct / 100.0
-    value_at_risk = base_asset_value * risk_factor
+    value_at_risk = base_asset_value * integrated_risk_frac
     
     ex1, ex2, ex3 = st.columns(3)
     with ex1:
@@ -317,12 +316,13 @@ with tab4:
         </div>
         """, unsafe_allow_html=True)
     with ex3:
-        action_text = "Optimal Production" if integrated_risk_pct < 40 else ("Schedule Maintenance" if integrated_risk_pct < 75 else "EMERGENCY SHUTDOWN")
+        action_text = "Optimal Production" if integrated_risk_frac < 0.4 else ("Schedule Maintenance" if integrated_risk_frac < 0.75 else "EMERGENCY SHUTDOWN")
+        primary_cause = 'Bearing Wear' if st.session_state.bearing_risk > st.session_state.motor_risk else 'Motor Stress'
         st.markdown(f"""
         <div class="metric-card" style="border-top-color: #F1C40F;">
             <h4 style="color:#666;">AI Recommended Action</h4>
             <h2 style="color:#333; margin-top:10px;">{action_text}</h2>
-            <p style="color:#888;">Primary Cause: {'Bearing Wear' if st.session_state.bearing_risk > st.session_state.motor_risk else 'Motor Stress'}</p>
+            <p style="color:#888;">Primary Cause: {primary_cause}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -330,14 +330,14 @@ with tab4:
     
     # Dynamic Radar Chart for full system view
     st.markdown("#### 🎯 Holistic Risk Distribution Map")
-    categories = ['Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Bearing Wear (Vib)']
-    values = [
+    categories = ('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Tool Wear (TWF)', 'Bearing Wear (Vib)')
+    values = (
         st.session_state.motor_faults['HDF'],
         st.session_state.motor_faults['OSF'],
         st.session_state.motor_faults['PWF'],
         st.session_state.motor_faults['TWF'],
         st.session_state.bearing_risk
-    ]
+    )
     
     fig_radar = go.Figure()
     fig_radar.add_trace(go.Scatterpolar(
@@ -349,7 +349,7 @@ with tab4:
         name='Risk Profile'
     ))
     fig_radar.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=)),
+        polar=dict(radialaxis=dict(visible=True, range=(0, 100))),
         showlegend=False,
         height=400,
         margin=dict(t=20, b=20)
