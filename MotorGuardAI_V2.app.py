@@ -162,24 +162,9 @@ with tab1:
         btn_analyze = st.button("🔍 Analyze Motor", use_container_width=True, type="primary")
 
     with c_out:
-        # Physics Engine (Guarantees dynamic response independent of ML Binary limitations)
-        temp_diff = process_temp - air_temp
-        p_hdf = min(max(0.0, ((10.0 - temp_diff) / 5.0) * 100.0), 98.0) if temp_diff <= 12.0 else 0.0
-        if process_temp > 315.0: p_hdf = max(p_hdf, (process_temp - 315.0) * 15.0)
-        
-        power = torque * rpm
-        if power > 85000: p_pwf = min(max(0.0, ((power - 85000) / 15000.0) * 100.0), 98.0)
-        elif power < 35000: p_pwf = min(max(0.0, ((35000 - power) / 10000.0) * 100.0), 98.0)
-        else: p_pwf = 0.0
-        
-        strain = torque * tool_wear
-        strain_limit = 11000 if motor_options.get(motor_type) == 0 else (12000 if motor_options.get(motor_type) == 1 else 13000)
-        p_osf = min(max(0.0, ((strain - (strain_limit*0.8)) / (strain_limit*0.2)) * 100.0), 98.0)
-        
-        p_twf = min(max(0.0, ((tool_wear - 190) / 60.0) * 100.0), 98.0)
-
-        ai_conf = 85.0
-        p_fail_model = 0.0
+        p_normal = p_hdf = p_osf = p_pwf = p_twf = 0.0
+        overall_motor_risk = 0.0
+        diag_label = "N/A"
         
         if models_ready:
             c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
@@ -194,23 +179,38 @@ with tab1:
             motor_df = pd.DataFrame(d1_vals, columns=motor_cols)
             motor_df[scale_cols] = scaler1.transform(motor_df[scale_cols])
             
-            probs_matrix = model1.predict_proba(motor_df)
+            # --- THE EXACT LOGIC FROM V0 ---
+            prediction_matrix = getattr(model1, 'predict')(motor_df)
+            diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
+            
+            probs_matrix = getattr(model1, 'predict_proba')(motor_df)
             probs_list = np.array(probs_matrix).flatten().tolist()
             
-            p_normal_model = probs_list.__getitem__(0) * 100.0 if len(probs_list) > 0 else 100.0
-            p_fail_model = 100.0 - p_normal_model
-            ai_conf = p_normal_model if p_fail_model < 50 else p_fail_model
+            if hasattr(model1, 'classes_'):
+                classes = list(str(c).strip().upper() for c in getattr(model1, 'classes_'))
+                probs_dict = dict(zip(classes, probs_list))
+                
+                p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
+                p_hdf = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
+                p_osf = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
+                p_pwf = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
+                p_twf = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
+                
+                overall_motor_risk = 100.0 - p_normal
+            else:
+                p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
+                p_hdf = p_osf = p_pwf = p_twf = 0.0
+                overall_motor_risk = 100.0 - p_normal
 
-        physics_risk = (1.0 - ((1.0 - p_hdf/100.0) * (1.0 - p_osf/100.0) * (1.0 - p_pwf/100.0) * (1.0 - p_twf/100.0))) * 100.0
-        overall_motor_risk = min(max(physics_risk, p_fail_model * 0.4), 99.0)
-        
         st.session_state.motor_risk = overall_motor_risk
         st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
 
         sys_status = "Safe" if overall_motor_risk < 40 else ("Warning" if overall_motor_risk < 75 else "Danger")
         status_color = "#00A65A" if sys_status=="Safe" else ("#F39C12" if sys_status=="Warning" else "#DD4B39")
         status_bg = "#E8F5E9" if sys_status=="Safe" else ("#FEF9E7" if sys_status=="Warning" else "#FDEDEC")
-        highest_fault = max(st.session_state.motor_faults, key=st.session_state.motor_faults.get) if overall_motor_risk >= 40 else "NORMAL"
+        
+        display_label = diag_label if diag_label.upper() != 'NORMAL' else 'NO IMMINENT FAILURE'
+        ai_conf = p_normal if overall_motor_risk < 50 else (100.0 - p_normal)
 
         cA, cB = st.columns(list((1, 1.5)))
         with cA:
@@ -220,7 +220,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             st.markdown(f"<div class='metric-card'><h4>AI Confidence Score</h4><h2 style='color:#3498DB;'>{ai_conf:.1f}%</h2></div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Primary Fault Diagnosis</h4><h2 style='color:{status_color};'>{highest_fault}</h2></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card' style='border-left-color:{status_color};'><h4>Model Diagnosis</h4><h2 style='color:{status_color};'>{display_label}</h2></div>", unsafe_allow_html=True)
         with cB:
             st.markdown("""
             <div class="zone-bar">
@@ -246,7 +246,7 @@ with tab1:
 
         if btn_analyze:
             m_type_str = motor_type.split(' ')
-            new_log = pd.DataFrame(list(({'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Asset': 'Motor Core', 'Risk Level': f"{overall_motor_risk:.1f}%", 'Primary FMEA': highest_fault, 'Status': sys_status, 'Grade': m_type_str, 'Air Temp [K]': air_temp, 'Core Temp [K]': process_temp, 'RPM': rpm, 'Torque [Nm]': torque, 'Wear [min]': tool_wear, 'Vib RMS': '-', 'Vib Kurt': '-'},)))
+            new_log = pd.DataFrame(list(({'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'Asset': 'Motor Core', 'Risk Level': f"{overall_motor_risk:.1f}%", 'Primary FMEA': display_label, 'Status': sys_status, 'Grade': m_type_str, 'Air Temp [K]': air_temp, 'Core Temp [K]': process_temp, 'RPM': rpm, 'Torque [Nm]': torque, 'Wear [min]': tool_wear, 'Vib RMS': '-', 'Vib Kurt': '-'},)))
             st.session_state.inspection_log = pd.concat(list((new_log, st.session_state.inspection_log)), ignore_index=True)
 
 # --- TAB 2: BEARING VIBRATION ---
@@ -271,6 +271,8 @@ with tab2:
         btn_vib = st.button("🔍 Run Vibration Analysis", use_container_width=True, type="primary")
 
     with cv2:
+        p_b_early = p_b_warn = p_b_fail = p_b_norm = 0.0
+        b_risk = 0.0
         if models_ready:
             bearing_cols = list(('RMS', 'Kurtosis', 'Skewness', 'Peak_to_Peak', 'Crest_Factor'))
             d2_values = list(((r_val, k_val, sk_val, p2p_val, cr_val),))
@@ -278,15 +280,21 @@ with tab2:
             scaled_b = scaler2.transform(bearing_df)
             probs_b = np.array(model2.predict_proba(scaled_b)).flatten().tolist()
             
-            p_b_fail = (sim_level / 100.0)**2 * 100.0
-            p_b_warn = (sim_level / 100.0) * (1.0 - (sim_level / 100.0)) * 200.0
-            p_b_early = (1.0 - (sim_level / 100.0))**2 * 100.0 if sim_level > 20 else (sim_level * 2.0)
-            p_b_norm = max(0.0, 100.0 - (p_b_fail + p_b_warn + p_b_early))
+            if hasattr(model2, 'classes_'):
+                c_b = list(str(c).strip().upper() for c in getattr(model2, 'classes_'))
+                pb_dict = dict(zip(c_b, probs_b))
+                if '1' in pb_dict and '2' not in pb_dict: 
+                    p_b_fail = float(pb_dict.get('1', pb_dict.get('FAILURE', 0.0))) * 100.0
+                    p_b_norm = float(pb_dict.get('0', pb_dict.get('NORMAL', 0.0))) * 100.0
+                else:
+                    p_b_early = float(pb_dict.get('1', 0.0)) * 100.0
+                    p_b_warn = float(pb_dict.get('2', 0.0)) * 100.0
+                    p_b_fail = float(pb_dict.get('3', 0.0)) * 100.0
+                    p_b_norm = float(pb_dict.get('0', 0.0)) * 100.0
             
-            tot = p_b_fail + p_b_warn + p_b_early + p_b_norm
-            p_b_fail, p_b_warn, p_b_early, p_b_norm = (p_b_fail/tot)*100, (p_b_warn/tot)*100, (p_b_early/tot)*100, (p_b_norm/tot)*100
+            b_risk = max((sim_level * 0.95), p_b_fail, ((p_b_early * 0.3) + (p_b_warn * 0.7) + (p_b_fail * 1.0)))
+            b_risk = min(b_risk, 100.0)
             
-            b_risk = (p_b_early * 0.3) + (p_b_warn * 0.7) + (p_b_fail * 1.0)
             st.session_state.bearing_risk = b_risk
             
             b_color = "#00A65A" if b_risk < 40 else ("#F39C12" if b_risk < 75 else "#DD4B39")
@@ -323,8 +331,8 @@ with tab3:
         st.markdown("#### 📊 Risk Contributor Analysis")
         fig_comp = go.Figure(data=list((
             go.Bar(name='Motor Factor', x=list(('Risk Component',)), y=list((st.session_state.motor_risk,)), marker_color='#3498DB', text=list((f"{st.session_state.motor_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto')
+            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto'),
+            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto')
         )))
         fig_comp.update_layout(barmode='group', height=350, margin=dict(t=20, b=20))
         st.plotly_chart(fig_comp, use_container_width=True)
@@ -360,7 +368,6 @@ with tab4:
         fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=list((0, 100)))), showlegend=False, height=350, margin=dict(t=30, b=30))
         st.plotly_chart(fig_r, use_container_width=True)
     with er2:
-        # --- THE FIX: Using list() explicitly inside px.bar to avoid TypeError from tuple assignment ---
         st.markdown("#### 🛡️ System Viability Index (Safe vs At Risk)")
         df_viability = pd.DataFrame({
             'Component': list(('Motor Core', 'Bearing Assembly', 'Total System')),
