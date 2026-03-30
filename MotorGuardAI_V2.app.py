@@ -168,11 +168,11 @@ with tab1:
         ai_conf = 100.0
         
         if models_ready:
-            c_air = 'Air temperature ' + chr(91) + 'K' + chr(93)
-            c_proc = 'Process temperature ' + chr(91) + 'K' + chr(93)
-            c_rpm = 'Rotational speed ' + chr(91) + 'rpm' + chr(93)
-            c_trq = 'Torque ' + chr(91) + 'Nm' + chr(93)
-            c_wear = 'Tool wear ' + chr(91) + 'min' + chr(93)
+            c_air = 'Air temperature [K]'
+            c_proc = 'Process temperature [K]'
+            c_rpm = 'Rotational speed [rpm]'
+            c_trq = 'Torque [Nm]'
+            c_wear = 'Tool wear [min]'
             motor_cols = list(('Type', c_air, c_proc, c_rpm, c_trq, c_wear))
             scale_cols = list((c_air, c_proc, c_rpm, c_trq, c_wear))
             
@@ -180,7 +180,6 @@ with tab1:
             motor_df = pd.DataFrame(d1_vals, columns=motor_cols)
             motor_df[scale_cols] = scaler1.transform(motor_df[scale_cols])
             
-            # --- V1: SMART SCALING LOGIC (EXACTLY AS YOU WROTE IT) ---
             prediction_matrix = getattr(model1, 'predict')(motor_df)
             diag_label = str(np.array(prediction_matrix).flatten().item(0)).strip()
             
@@ -188,40 +187,55 @@ with tab1:
             probs_list = np.array(probs_matrix).flatten().tolist()
             
             if hasattr(model1, 'classes_'):
-                classes = list(str(c).strip().upper() for c in getattr(model1, 'classes_'))
+                classes = list((str(c).strip().upper() for c in getattr(model1, 'classes_')))
                 probs_dict = dict(zip(classes, probs_list))
                 
                 p_normal = float(probs_dict.get('NORMAL', 0.0)) * 100.0
-                
                 p_hdf_raw = float(probs_dict.get('HEAT DISSIPATION FAILURE (HDF)', probs_dict.get('HDF', 0.0))) * 100.0
                 p_osf_raw = float(probs_dict.get('OVERSTRAIN FAILURE (OSF)', probs_dict.get('OSF', 0.0))) * 100.0
                 p_pwf_raw = float(probs_dict.get('POWER FAILURE (PWF)', probs_dict.get('PWF', 0.0))) * 100.0
                 p_twf_raw = float(probs_dict.get('TOOL WEAR FAILURE (TWF)', probs_dict.get('TWF', 0.0))) * 100.0
-                
-                raw_overall_risk = 100.0 - p_normal
-                ai_conf = p_normal if raw_overall_risk < 50 else raw_overall_risk
-                
-                # ✅ V1 ADVANCED SCALING LOGIC (Caps at 100% if risk > 85%)
-                if raw_overall_risk >= 85.0:
-                    overall_motor_risk = 100.0
-                else:
-                    overall_motor_risk = raw_overall_risk
-
-                # Scale the sub-gauges to match the overall risk
-                max_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
-                if max_fault > 0:
-                    scale_factor = overall_motor_risk / max_fault
-                    p_hdf = min(100.0, p_hdf_raw * scale_factor)
-                    p_osf = min(100.0, p_osf_raw * scale_factor)
-                    p_pwf = min(100.0, p_pwf_raw * scale_factor)
-                    p_twf = min(100.0, p_twf_raw * scale_factor)
-                else:
-                    p_hdf = p_osf = p_pwf = p_twf = 0.0
             else:
                 p_normal = float(probs_list.pop(0)) * 100.0 if len(probs_list) > 0 else 0.0
+                p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
+                
+            # 💡 PHYSICS OVERRIDE: Prevent "Idling" Anomaly False Positives
+            if rpm < 1300 and torque < 25.0:
+                p_normal = 100.0
+                p_hdf_raw = p_osf_raw = p_pwf_raw = p_twf_raw = 0.0
+                diag_label = 'NORMAL'
+
+            # 💡 PHYSICS OVERRIDE: Break ML Limits if conditions are extreme
+            power = torque * rpm
+            if power > 75000: p_pwf_raw = max(p_pwf_raw, min(100.0, (power - 75000) / 150.0))
+            strain = torque * tool_wear
+            strain_lim = 11000 if motor_options.get(motor_type) == 0 else (12000 if motor_options.get(motor_type) == 1 else 13000)
+            if strain > strain_lim: p_osf_raw = max(p_osf_raw, min(100.0, (strain - strain_lim) / 50.0))
+            if tool_wear > 200: p_twf_raw = max(p_twf_raw, min(100.0, (tool_wear - 200) * 2.0))
+            temp_diff = process_temp - air_temp
+            if temp_diff <= 10.0 and rpm < 1500: p_hdf_raw = max(p_hdf_raw, 85.0)
+            if process_temp > 315.0: p_hdf_raw = max(p_hdf_raw, 95.0)
+
+            # --- SMART SCALING (From Your Original V1) ---
+            raw_overall_risk = 100.0 - p_normal
+            max_phys_fault = max(p_hdf_raw, p_osf_raw, p_pwf_raw, p_twf_raw)
+            if max_phys_fault > raw_overall_risk: raw_overall_risk = max_phys_fault
+            
+            ai_conf = p_normal if raw_overall_risk < 50 else raw_overall_risk
+            
+            if raw_overall_risk >= 85.0:
+                overall_motor_risk = 100.0
+            else:
+                overall_motor_risk = raw_overall_risk
+
+            if max_phys_fault > 0:
+                scale_factor = overall_motor_risk / max_phys_fault
+                p_hdf = min(100.0, p_hdf_raw * scale_factor)
+                p_osf = min(100.0, p_osf_raw * scale_factor)
+                p_pwf = min(100.0, p_pwf_raw * scale_factor)
+                p_twf = min(100.0, p_twf_raw * scale_factor)
+            else:
                 p_hdf = p_osf = p_pwf = p_twf = 0.0
-                overall_motor_risk = 100.0 - p_normal
-                ai_conf = p_normal if overall_motor_risk < 50 else overall_motor_risk
 
         st.session_state.motor_risk = overall_motor_risk
         st.session_state.motor_faults = {'HDF': p_hdf, 'OSF': p_osf, 'PWF': p_pwf, 'TWF': p_twf}
@@ -231,6 +245,8 @@ with tab1:
         status_bg = "#E8F5E9" if sys_status=="Safe" else ("#FEF9E7" if sys_status=="Warning" else "#FDEDEC")
         
         display_label = diag_label if diag_label.upper() != 'NORMAL' else 'NO IMMINENT FAILURE'
+        if max_phys_fault > 40 and display_label == 'NO IMMINENT FAILURE':
+            display_label = max(st.session_state.motor_faults, key=st.session_state.motor_faults.get)
 
         cA, cB = st.columns(list((1, 1.5)))
         with cA:
@@ -345,8 +361,8 @@ with tab3:
         st.markdown("#### 📊 Risk Contributor Analysis")
         fig_comp = go.Figure(data=list((
             go.Bar(name='Motor Factor', x=list(('Risk Component',)), y=list((st.session_state.motor_risk,)), marker_color='#3498DB', text=list((f"{st.session_state.motor_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto'),
-            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto')
+            go.Bar(name='System (Series)', x=list(('Risk Component',)), y=list((integrated_risk,)), marker_color=f_color, text=list((f"{integrated_risk:.1f}%",)), textposition='auto'),
+            go.Bar(name='Bearing Factor', x=list(('Risk Component',)), y=list((st.session_state.bearing_risk,)), marker_color='#9B59B6', text=list((f"{st.session_state.bearing_risk:.1f}%",)), textposition='auto')
         )))
         fig_comp.update_layout(barmode='group', height=350, margin=dict(t=20, b=20))
         st.plotly_chart(fig_comp, use_container_width=True)
@@ -375,17 +391,12 @@ with tab4:
     st.markdown("---")
     er1, er2 = st.columns(list((1.5, 2)))
     with er1:
-        st.markdown("#### 🎯 Safe vs Failure AI Projection (Motor)")
-        # ADDED THE VISUALIZATION YOU REQUESTED
-        df_survival = pd.DataFrame({
-            'Status': list(('Safe (Nominal Operation)', 'Failure (Imminent Risk)')),
-            'Probability (%)': list(((100.0 - st.session_state.motor_risk), st.session_state.motor_risk))
-        })
-        fig_surv = px.bar(df_survival, x='Probability (%)', y='Status', orientation='h', color='Status', 
-                          color_discrete_sequence=list(('#2ecc71', '#e74c3c')), title="Motor Core Projection")
-        fig_surv.update_layout(height=350, margin=dict(t=40, b=10))
-        st.plotly_chart(fig_surv, use_container_width=True)
-
+        st.markdown("#### 🎯 Holistic Fault Radar")
+        cats = list(('Heat (HDF)', 'Strain (OSF)', 'Power (PWF)', 'Wear (TWF)', 'Bearing (Vib)'))
+        vals = list((st.session_state.motor_faults.get('HDF',0), st.session_state.motor_faults.get('OSF',0), st.session_state.motor_faults.get('PWF',0), st.session_state.motor_faults.get('TWF',0), st.session_state.bearing_risk))
+        fig_r = go.Figure(data=go.Scatterpolar(r=vals, theta=cats, fill='toself', line_color='#DD4B39'))
+        fig_r.update_layout(polar=dict(radialaxis=dict(visible=True, range=list((0, 100)))), showlegend=False, height=350, margin=dict(t=30, b=30))
+        st.plotly_chart(fig_r, use_container_width=True)
     with er2:
         st.markdown("#### 🛡️ System Viability Index (Safe vs At Risk)")
         df_viability = pd.DataFrame({
