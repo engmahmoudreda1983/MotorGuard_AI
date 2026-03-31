@@ -99,8 +99,7 @@ def check_password():
                 st.rerun()
             else:
                 st.error("❌ Incorrect Username or Password")
-        st.markdown("<hr><div style='text-align: center; color: #888; font-size: 11px;'><strong>© 2026 PowerGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>
-            Confidential and Proprietary. The predictive algorithms and expert system overrides within this application are protected intellectual property.</strong></div>", unsafe_allow_html=True)
+        st.markdown("<hr><div style='text-align: center; color: #888; font-size: 11px;'><strong>© 2026 PowerGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong></div>", unsafe_allow_html=True)
     return False
 
 def create_gauge(value, title, color, max_v=100.0, h=250):
@@ -139,7 +138,7 @@ st.markdown("""
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h2 style="margin:0;">⚙️ MotorGuard AI <span style="color:#DD4B39;">Enterprise</span></h2>
-            <p style="margin:0; font-size: 14px; color:#CCCCCC;">Advanced Asset Performance Management </p>
+            <p style="margin:0; font-size: 14px; color:#CCCCCC;">Advanced Asset Performance Management</p>
         </div>
         <div style="text-align: right;"><h4 style="margin:0; color:#00ff88;">⚡ LIVE TELEMETRY</h4></div>
     </div>
@@ -501,5 +500,4 @@ with tab4:
 # =========================================
 # 6. FOOTER
 # =========================================
-st.markdown("<br><hr><div style='text-align: center; color: #888; font-size: 11px;'><strong>© 2026 PowerGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>
-            Confidential and Proprietary. The predictive algorithms and expert system overrides within this application are protected intellectual property.</div>", unsafe_allow_html=True)
+st.markdown("<br><hr><div style='text-align: center; color: #888; font-size: 11px;'><strong>© 2026 PowerGuard AI by Eng. Mahmoud Reda Ibrahim. All Rights Reserved.</strong><br>Confidential and Proprietary.</div>", unsafe_allow_html=True)
