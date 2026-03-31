@@ -1,6 +1,6 @@
 # ==============================================================================
 # © 2026 MotorGuard AI | Enterprise Predictive Maintenance & FMEA
-# Developed by: Eng. Mahmoud Reda Ibrahim (DBA Research)
+# Developed by: Eng. Mahmoud Reda Ibrahim 
 # Confidential and Proprietary.
 # ==============================================================================
 
@@ -87,7 +87,7 @@ def check_password():
     with col2: 
         st.markdown("""
         <div style="background-color:#F8F9FA; padding:30px; border-radius:15px; border-top: 5px solid #DD4B39; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 50px;">
-            <h2 style="color:#1E1E1E; margin-bottom: 5px;">MotorGuard <span style="color:#DD4B39;">Enterprise</span></h2>
+            <h2 style="color:#1E1E1E; margin-bottom: 5px;">PowerGuard<span style="color:#DD4B39;">Enterprise Login</span></h2>
             <p style="color:#666666; font-size: 14px; margin-bottom: 20px;">Secure Industrial Diagnostic Portal</p>
         </div><br>
         """, unsafe_allow_html=True)
