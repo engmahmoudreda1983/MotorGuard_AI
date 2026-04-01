@@ -94,7 +94,8 @@ def check_password():
         user = st.text_input("Username", placeholder="Enter your username")
         password = st.text_input("Password", type="password", placeholder="Enter your password")
         if st.button("Secure Login", use_container_width=True, type="primary"):
-            if user == "admin" and password == "DBA2026":
+            # التعديل هنا لسحب البيانات من st.secrets
+            if user == st.secrets["APP_USERNAME"] and password == st.secrets["APP_PASSWORD"]:
                 st.session_state.authenticated = True
                 st.rerun()
             else:
