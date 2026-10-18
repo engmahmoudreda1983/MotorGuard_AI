@@ -197,7 +197,7 @@ def rpn_plot(a, height=230):
                 text=[f"RPN {rpn} = S {int(a['S'])} × O {int(a['O'])} × D {int(a['D'])}"],
                 textposition='inside' if rpn > 110 else 'outside', insidetextanchor='middle', cliponaxis=False,
                 hoverinfo='skip', textfont=dict(color='white' if rpn > 110 else '#222'))
-    fig.update_layout(title='Risk Priority Number of the governing mode (max 200)', height=height, showlegend=False,
+    fig.update_layout(title='RPN of the governing mode (max 200)', height=height, showlegend=False,
                       xaxis=dict(range=[0, 200], tickvals=[0, 40, 100, 200], title='RPN'),
                       yaxis=dict(visible=False, range=[-0.6, 0.8]), margin=dict(l=10, r=10, t=45, b=40))
     return fig
