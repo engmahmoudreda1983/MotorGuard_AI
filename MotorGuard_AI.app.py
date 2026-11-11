@@ -663,6 +663,46 @@ def check_page(p, kind):
 # ==========================================
 # --- 5. Tabs ---
 # ==========================================
+# ---- about this module: shown open at the top of the overview page (it can be closed)
+ABOUT = {
+ "lead": "Checks the condition of HV motors from winding temperatures and cooling, bearing vibration, insulation tests and the supply and starting duty, and ranks them by risk.",
+ "in": [
+  "Motor register: rating, insulation class, bearings, foundation",
+  "Stator and cooling temperatures",
+  "Vibration (mm/s) and bearing temperatures",
+  "Insulation tests (IR, PI), starts and supply voltage"
+ ],
+ "out": [
+  "Thermal margin and insulation life",
+  "Vibration zone and bearing condition",
+  "Supply and starting stress",
+  "Risk ranking, FMEA and combined PDF report"
+ ],
+ "start": [
+  "Motor Risk & FMEA: choose the motor and enter its readings",
+  "Use Stator & Cooling, Bearings & Vibration and Supply & Starting for detail",
+  "Read the ranking in Plant Overview"
+ ],
+ "pages": [
+  "Plant Overview: every motor and its risk",
+  "Motor Risk & FMEA",
+  "Stator & Cooling, Bearings & Vibration, Supply & Starting",
+  "Combined Report, Historical Study"
+ ],
+ "std": "IEC 60034-1 · NEMA MG1 (motors) · IEEE 43 (insulation) · ISO 20816-3 (vibration) · ISO 55000 / IEC 31010 (risk)"
+}
+
+
+def about_module():
+    with st.expander('ℹ️ About this module: what it does and how to use it', expanded=True):
+        st.markdown(ABOUT['lead'])
+        for (t1, k1), (t2, k2) in ((('What you upload', 'in'), ('What you get', 'out')), (('How to start', 'start'), ('Pages', 'pages'))):
+            for col, title, key in zip(st.columns(2), (t1, t2), (k1, k2)):
+                with col.container(border=True):
+                    st.markdown(f'**{title}**\n\n' + '\n'.join((f'{i + 1}. ' if key == 'start' else '- ') + x for i, x in enumerate(ABOUT[key])))
+        st.caption('Standards: ' + ABOUT['std'])
+
+
 tabs = st.tabs(["🏭 Plant Overview", "⚙️ Motor Risk & FMEA", "🌡️ Stator & Cooling", "🔩 Bearings & Vibration",
                 "⚡ Supply & Starting", "📄 Combined Report", "📈 Historical Study"])
 
@@ -697,6 +737,7 @@ def read_uploads(prefix):
 
 # ---------------- Overview
 with tabs[0]:
+    about_module()
     st.radio("Show", [SRC_PAGES, SRC_DEMO], horizontal=True, key='ov_src')
     R0 = current_records()
     if st.session_state['ov_src'] == SRC_PAGES:
